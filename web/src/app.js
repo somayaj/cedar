@@ -297,13 +297,12 @@ function renderDiagramSliceBadges(slices) {
  */
 function completeLayoutMermaidArticle(spec, sliceBadgesHtml) {
   const mt = spec.first ? "" : " mt-8";
-  const extraClass = spec.view === "uml" ? " cedar-layout-view-uml" : "";
-  return `<article class="cedar-layout-view${extraClass}${mt} w-full" data-layout-view="${escapeHtml(spec.view)}" data-diagram-wrap>
+  return `<article class="cedar-layout-view cedar-architecture-read-panel${mt} w-full" data-layout-view="${escapeHtml(spec.view)}" data-diagram-wrap>
               <div class="architecture-read-mermaid-head mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p class="cedar-label mb-0">${escapeHtml(spec.label)}</p>
                 ${mermaidToolbar(sliceBadgesHtml)}
               </div>
-              <div class="diagram-complete-layout diagram-stage-canvas cedar-mermaid-scroll">
+              <div class="cedar-cy-host diagram-overview-read diagram-complete-layout diagram-stage-canvas cedar-mermaid-scroll">
                 <div id="${escapeHtml(spec.id)}" class="cedar-mermaid-source m-0" role="img" aria-label="${escapeHtml(spec.aria)}"></div>
               </div>
             </article>`;
@@ -696,11 +695,6 @@ const COMPLETE_LAYOUT_MERMAID_SLOTS = [
   { key: "components", sel: "#cedar-mermaid-components" },
   { key: "flow", sel: "#cedar-mermaid-flow" },
   { key: "events", sel: "#cedar-mermaid-events" },
-  { key: "c4Context", sel: "#cedar-mermaid-c4-context" },
-  { key: "c4Container", sel: "#cedar-mermaid-c4-container" },
-  { key: "c4Component", sel: "#cedar-mermaid-c4-component" },
-  { key: "c4Dynamic", sel: "#cedar-mermaid-c4-dynamic" },
-  { key: "c4Deployment", sel: "#cedar-mermaid-c4-deployment" },
 ];
 
 function wireCompleteLayoutViews(root, views) {
@@ -863,14 +857,7 @@ function renderResults(container, data) {
   }
   const hasLayoutViews = Boolean(
     layoutViews &&
-      (layoutViews.components?.trim() ||
-        layoutViews.flow?.trim() ||
-        layoutViews.events?.trim() ||
-        layoutViews.c4Context?.trim() ||
-        layoutViews.c4Container?.trim() ||
-        layoutViews.c4Component?.trim() ||
-        layoutViews.c4Dynamic?.trim() ||
-        layoutViews.c4Deployment?.trim())
+      (layoutViews.components?.trim() || layoutViews.flow?.trim() || layoutViews.events?.trim())
   );
   const showArchitectureSection = archSliceCount > 0 || hasLayoutViews;
   const architectureReadSummary = (
@@ -1040,7 +1027,7 @@ function renderResults(container, data) {
           <div class="cedar-pr-chat-log mt-2" id="cedar-pr-chat-log" aria-live="polite" aria-relevant="additions"></div>
           <form class="cedar-pr-chat-form mt-2">
             <label class="sr-only" for="cedar-pr-chat-input">Question about this pull request</label>
-            <textarea id="cedar-pr-chat-input" class="cedar-pr-chat-input" rows="3" maxlength="2000"
+            <textarea id="cedar-pr-chat-input" class="cedar-pr-chat-input" rows="5" maxlength="2000"
               placeholder="Architecture, slices, blockers, what changed…"></textarea>
             <button type="submit" class="cedar-pr-chat-send cedar-btn-secondary mt-2 w-full text-xs">Send</button>
           </form>
@@ -1126,21 +1113,8 @@ function renderResults(container, data) {
                 : ""
             }
             ${
-              composite
-                ? `<details class="mt-6 group"${architectureReadSummary ? "" : " open"}>
-                <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Complete composite markdown</summary>
-                <pre class="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-xl border border-white/[0.04] bg-black/40 p-5 font-mono text-xs leading-relaxed text-zinc-400">${escapeHtml(composite.body)}</pre>
-              </details>`
-                : ""
-            }
-          </section>`
-                : !breakouts?.architectureSummary
-                  ? `<p class="text-sm text-zinc-500">Architecture narrative and diagrams appear once partitioning finishes.</p>`
-                  : ""
-            }
-            ${
               hasLayoutViews
-                ? `<section class="cedar-diagram-stage mt-6 w-full min-w-0" aria-labelledby="complete-layout-heading">
+                ? `<div class="mt-6 w-full min-w-0" id="architecture-read-layout" aria-labelledby="complete-layout-heading">
             <p id="complete-layout-heading" class="cedar-label mb-4">Complete layout</p>
             <div class="cedar-complete-layout-views w-full min-w-0" id="architecture-read-mermaid">
             ${[
@@ -1153,17 +1127,25 @@ function renderResults(container, data) {
               },
               { view: "flow", label: "Flow", id: "cedar-mermaid-flow", aria: "Request flow diagram" },
               { view: "events", label: "Events", id: "cedar-mermaid-events", aria: "Domain events sequence diagram" },
-              { view: "c4-context", label: "C4 · context", id: "cedar-mermaid-c4-context", aria: "C4 system context" },
-              { view: "c4-container", label: "C4 · container", id: "cedar-mermaid-c4-container", aria: "C4 container diagram" },
-              { view: "c4-component", label: "C4 · component", id: "cedar-mermaid-c4-component", aria: "C4 component diagram" },
-              { view: "c4-dynamic", label: "C4 · dynamic", id: "cedar-mermaid-c4-dynamic", aria: "C4 dynamic runtime diagram" },
-              { view: "c4-deployment", label: "C4 · deployment", id: "cedar-mermaid-c4-deployment", aria: "C4 deployment diagram" },
             ]
               .map((spec) => completeLayoutMermaidArticle(spec, diagramSliceBadges))
               .join("")}
             </div>
-          </section>`
+          </div>`
                 : ""
+            }
+            ${
+              composite
+                ? `<details class="mt-6 group"${architectureReadSummary ? "" : " open"}>
+                <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Complete composite markdown</summary>
+                <pre class="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-xl border border-white/[0.04] bg-black/40 p-5 font-mono text-xs leading-relaxed text-zinc-400">${escapeHtml(composite.body)}</pre>
+              </details>`
+                : ""
+            }
+          </section>`
+                : !breakouts?.architectureSummary
+                  ? `<p class="text-sm text-zinc-500">Architecture narrative and diagrams appear once partitioning finishes.</p>`
+                  : ""
             }
           </div>
 

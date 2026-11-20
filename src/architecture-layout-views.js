@@ -9,13 +9,6 @@ import { normalizeSliceId } from "./architecture-model.js";
 import { formatPrHubLabel, mermaidFlowNodeLabel } from "./diagram-labels.js";
 import { buildPrArchitectureLayers } from "./pr-architecture-layers.js";
 import { mermaidClassId, mermaidParticipantAlias, mermaidSafeText } from "./mermaid-sanitize.js";
-import {
-  buildC4ComponentView,
-  buildC4ContainerView,
-  buildC4ContextView,
-  buildC4DeploymentView,
-  buildC4DynamicView,
-} from "./c4-layout-views.js";
 
 const MAX_LAYERS = 16;
 
@@ -116,11 +109,6 @@ export function buildCompleteLayoutViews(microPrs, breakouts, pull, target, slic
     components: buildComponentsClassDiagram(layers, registry, sliceNums),
     flow: buildRequestFlowDiagram(layers, active, pull, target),
     events: buildEventsSequenceDiagram(layers, active, registry),
-    c4Context: buildC4ContextView(layers, pull, target),
-    c4Container: buildC4ContainerView(layers, pull, target),
-    c4Component: buildC4ComponentView(layers, registry, pull, target),
-    c4Dynamic: buildC4DynamicView(layers, active, registry, pull, target),
-    c4Deployment: buildC4DeploymentView(layers, pull, target),
   };
 }
 
@@ -378,36 +366,6 @@ export function buildCompleteLayoutMarkdown(views) {
     "",
     "```mermaid",
     views.events,
-    "```",
-    "",
-    "#### C4 · context",
-    "",
-    "```mermaid",
-    views.c4Context ?? "",
-    "```",
-    "",
-    "#### C4 · container",
-    "",
-    "```mermaid",
-    views.c4Container ?? "",
-    "```",
-    "",
-    "#### C4 · component",
-    "",
-    "```mermaid",
-    views.c4Component ?? "",
-    "```",
-    "",
-    "#### C4 · dynamic",
-    "",
-    "```mermaid",
-    views.c4Dynamic ?? "",
-    "```",
-    "",
-    "#### C4 · deployment",
-    "",
-    "```mermaid",
-    views.c4Deployment ?? "",
     "```",
   ].join("\n");
 }

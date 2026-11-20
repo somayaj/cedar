@@ -275,7 +275,9 @@
     height: min(42rem, 58vh);
   }
 
-  #architecture-read-overview .architecture-read-mermaid-head {
+  #architecture-read-overview .architecture-read-mermaid-head,
+  #architecture-read-mermaid .architecture-read-mermaid-head,
+  #architecture-read-layout .architecture-read-mermaid-head {
     @apply sticky top-16 z-10 -mx-1 rounded-lg bg-black/50 px-1 py-2 backdrop-blur-md;
   }
 
@@ -289,14 +291,8 @@
     @apply w-full min-w-0 max-w-none;
   }
 
-  .cedar-complete-layout-views .diagram-stage-canvas,
-  .cedar-complete-layout-views .cedar-layout-view .diagram-complete-layout {
-    width: 100%;
-    min-height: min(32rem, 62vh);
-    height: min(42rem, 58vh);
-    max-height: min(88vh, 960px);
-    @apply overflow-auto rounded-2xl border border-white/[0.08] bg-black/45 p-3 sm:p-4;
-    background: radial-gradient(120% 80% at 50% 0%, rgb(23 23 23 / 0.9) 0%, rgb(5 5 5 / 0.95) 55%);
+  #architecture-read-mermaid .cedar-cy-host.diagram-stage-canvas {
+    @apply p-3 sm:p-4;
   }
 
   .cedar-complete-layout-views .cedar-mermaid-scroll .mermaid-rendered,
@@ -320,7 +316,7 @@
     opacity: 1 !important;
   }
 
-  .cedar-complete-layout-views .cedar-layout-view .diagram-stage-canvas {
+  .cedar-complete-layout-views .cedar-layout-view .diagram-overview-read.diagram-stage-canvas {
     overflow: auto;
     overscroll-behavior: contain;
   }
@@ -338,7 +334,7 @@
     min-height: 8rem;
   }
 
-  .cedar-complete-layout-views .cedar-layout-view.is-diagram-maximized .diagram-stage-canvas {
+  .cedar-complete-layout-views .cedar-layout-view.is-diagram-maximized .diagram-overview-read.diagram-stage-canvas {
     min-height: min(64vh, 780px);
     height: min(78vh, 1000px);
     max-height: min(92vh, 1120px);
@@ -509,7 +505,7 @@
   }
 
   .cedar-review-layout {
-    --cedar-sidebar-width: 18rem;
+    --cedar-sidebar-width: 21rem;
     @apply flex w-full min-w-0 max-w-none flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-0;
   }
 
@@ -526,9 +522,10 @@
 
   @media (min-width: 1024px) {
     .cedar-review-sidebar {
+      @apply flex flex-col;
       width: var(--cedar-sidebar-width);
-      min-width: 10rem;
-      max-width: min(22.5rem, 28vw);
+      min-width: 12rem;
+      max-width: min(26rem, 34vw);
     }
   }
 
@@ -715,8 +712,20 @@
     }
   }
 
+  .cedar-pr-chat-card {
+    @apply flex min-h-0 flex-col lg:min-h-[18rem] lg:flex-1;
+  }
+
   .cedar-pr-chat-log {
-    @apply flex max-h-[min(22rem,40vh)] min-h-[6rem] flex-col gap-2 overflow-y-auto rounded-xl border border-white/[0.06] bg-black/40 p-2;
+    @apply flex min-h-[10rem] flex-1 flex-col gap-2 overflow-y-auto rounded-xl border border-white/[0.06] bg-black/40 p-2.5;
+    max-height: min(36rem, 56vh);
+  }
+
+  @media (min-width: 1024px) {
+    .cedar-pr-chat-log {
+      min-height: 14rem;
+      max-height: min(42rem, calc(100vh - 20rem));
+    }
   }
 
   .cedar-pr-chat-bubble {
@@ -740,7 +749,7 @@
   }
 
   .cedar-pr-chat-input {
-    @apply w-full resize-y rounded-xl border border-white/[0.08] bg-black/50 px-3 py-2 text-[11px] leading-relaxed text-zinc-200 placeholder:text-zinc-600 focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10;
+    @apply w-full min-h-[5.5rem] resize-y rounded-xl border border-white/[0.08] bg-black/50 px-3 py-2.5 text-xs leading-relaxed text-zinc-200 placeholder:text-zinc-600 focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10;
   }
 
   .cedar-pr-chat-card .cedar-pr-chat-hint {
