@@ -538,6 +538,22 @@ async function runMicroReviewPass(ordered, ctx) {
           error: "Composer slice review stopped after an earlier auth/API error",
         },
       };
+    } else if (
+      sliceReviewAiAvailable() &&
+      ctx.useAiReview &&
+      micro.files.length &&
+      result.status !== "skipped" &&
+      !result.cursorReview
+    ) {
+      result = {
+        ...result,
+        cursorReview: {
+          source: "cursor",
+          count: 0,
+          status: "error",
+          error: "Composer slice pass did not attach — re-run Start review",
+        },
+      };
     }
 
     microResults.push(result);

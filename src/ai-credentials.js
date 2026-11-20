@@ -1,3 +1,5 @@
+import { reviewCursorApiKeyOverride } from "./review-credentials.js";
+
 /**
  * @param {string} name
  */
@@ -7,8 +9,24 @@ function trimEnv(name) {
   return String(v).trim();
 }
 
+/**
+ * @param {string} value
+ */
+function stripWrappingQuotes(value) {
+  const v = value.trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"') && v.length >= 2) ||
+    (v.startsWith("'") && v.endsWith("'") && v.length >= 2)
+  ) {
+    return v.slice(1, -1).trim();
+  }
+  return v;
+}
+
 export function cursorApiKey() {
-  return trimEnv("CURSOR_API_KEY");
+  const override = reviewCursorApiKeyOverride();
+  if (override) return stripWrappingQuotes(override);
+  return stripWrappingQuotes(trimEnv("CURSOR_API_KEY"));
 }
 
 export function openRouterApiKey() {

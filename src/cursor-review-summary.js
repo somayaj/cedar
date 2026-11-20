@@ -43,12 +43,14 @@ export function buildCursorReviewSummary(microResults, macroReview, useAiReview)
   const requested = Boolean(useAiReview);
   const enabled = Boolean(requested && available);
   const slice = summarizeCursorSliceReview(microResults);
+  const slicePassRan = slice.slicesAttempted > 0;
   const macroFindingCount = Array.isArray(macroReview?.findings) ? macroReview.findings.length : 0;
 
   return {
     enabled,
     requested,
-    available,
+    available: available || slicePassRan,
+    slicePassRan,
     slice,
     macro: macroReview
       ? {

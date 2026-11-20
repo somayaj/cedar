@@ -299,18 +299,48 @@ async function refreshHealth() {
   }
 }
 
+async function ensureCredentialsBeforeReview(fd) {
+  const githubToken = String(fd.get("githubToken") ?? "").trim();
+  const cursorApiKey = String(fd.get("cursorApiKey") ?? "").trim();
+  if (!githubToken && !cursorApiKey) return;
+  const res = await fetch("/api/config/env", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      githubToken: githubToken || undefined,
+      cursorApiKey: cursorApiKey || undefined,
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? "Could not save .env");
+  await refreshHealth();
+}
+
 async function onSubmit(e) {
   e.preventDefault();
   const form = e.currentTarget;
   const fd = new FormData(form);
+
+  const errorEl = document.getElementById("form-error");
+  try {
+    await ensureCredentialsBeforeReview(fd);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    errorEl.textContent = msg;
+    errorEl.classList.remove("hidden");
+    showToast(msg, "error");
+    return;
+  }
+
+  const cursorFromForm = String(fd.get("cursorApiKey") ?? "").trim();
+  /** @type {{ prUrl: string, token?: string, cursorApiKey?: string, post: boolean, postMicro: boolean }} */
   const payload = {
     prUrl: String(fd.get("prUrl")).trim(),
     token: String(fd.get("token") || "").trim() || undefined,
     post: fd.get("post") === "on",
     postMicro: fd.get("postMicro") === "on",
   };
-
-  const errorEl = document.getElementById("form-error");
+  if (cursorFromForm) payload.cursorApiKey = cursorFromForm;
   const btn = document.getElementById("submit-btn");
   const label = document.getElementById("submit-label");
   const hero = document.getElementById("hero");

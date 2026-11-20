@@ -90,11 +90,15 @@ function sliceCursorEmptyMessage(r, session) {
     (typeof window !== "undefined" ? window.__cedarServerHealth : null);
   const data = session?.data;
   const summary = data?.cursorReviewSummary;
+  const slicePassRan = Boolean(summary?.slicePassRan || (summary?.slice?.slicesAttempted ?? 0) > 0);
   const hasCursorKey = Boolean(
-    summary?.available ??
-      health?.hasCursor ??
-      health?.sliceReviewAvailable ??
-      data?.partition?.mode === "ai"
+    slicePassRan ||
+      summary?.available ||
+      summary?.enabled ||
+      data?.macroReview ||
+      data?.partition?.mode === "ai" ||
+      health?.hasCursor ||
+      health?.sliceReviewAvailable
   );
   const cr = r.cursorReview;
   const rawComments = Array.isArray(r.reviewComments) ? r.reviewComments.length : 0;
@@ -132,7 +136,7 @@ function sliceCursorEmptyMessage(r, session) {
     return `No Cursor draft comments for this slice. GitHub inline comments, if any, stay on the diff only.`;
   }
 
-  return `This Cedar API process does not see <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> (restart <span class="font-mono text-zinc-600">npm run dev:api</span> after editing <span class="font-mono text-zinc-600">.env</span>), then <strong class="font-medium text-zinc-400">Start review</strong>.`;
+  return `Cursor slice review did not run on this pass. In <strong class="font-medium text-zinc-400">Room configuration</strong>, paste your key and click <strong class="font-medium text-zinc-400">Save to .env</strong>, confirm the status shows <span class="font-mono text-zinc-500">In .env / API · set</span>, then <strong class="font-medium text-zinc-400">Start review</strong> and watch <strong class="font-medium text-zinc-400">Cursor · slice review</strong> in the log.`;
 }
 
 /**

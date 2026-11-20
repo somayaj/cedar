@@ -24,6 +24,7 @@ import { warmCursorBridgeSession } from "./cursor-bridge-client.js";
 import { runWithReviewProgress } from "./review-progress.js";
 import { resolveDiffFontConfig } from "./diff-font-config.js";
 import { ENV_FILE_PATH, envFileExists, upsertProjectEnv } from "./env-file.js";
+import { runWithReviewCredentials } from "./review-credentials.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -121,11 +122,16 @@ function reviewPayload(report) {
 
 /**
  * @param {import("express").Request} req
- * @returns {{ target: { owner: string, repo: string, pr: number }, token: string, post: boolean, postMicro: boolean } | { error: string, status: number }}
+ * @returns {{ target: { owner: string, repo: string, pr: number }, token: string, post: boolean, postMicro: boolean, cursorApiKey?: string } | { error: string, status: number }}
  */
 function parseReviewRequest(req) {
-  const { post, postMicro } = req.body ?? {};
-  const token = req.body?.token ?? process.env.GITHUB_TOKEN;
+  const body = req.body ?? {};
+  const { post, postMicro, cursorApiKey: cursorFromBody } = body;
+  const token = body.token ?? process.env.GITHUB_TOKEN;
+  const cursorKey =
+    (typeof cursorFromBody === "string" && cursorFromBody.trim()) ||
+    cursorApiKey() ||
+    undefined;
   try {
     const target = resolvePrTarget(req.body);
     if (!token) {
@@ -139,6 +145,7 @@ function parseReviewRequest(req) {
       token,
       post: Boolean(post),
       postMicro: Boolean(postMicro),
+      cursorApiKey: cursorKey,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -154,15 +161,17 @@ app.post("/api/review", async (req, res) => {
   }
 
   try {
-    const report = await runPrReviewPipeline({
-      owner: parsed.target.owner,
-      repo: parsed.target.repo,
-      pr: parsed.target.pr,
-      token: parsed.token,
-      configPath: path.join(root, "components.yaml"),
-      post: parsed.post,
-      postMicro: parsed.postMicro,
-    });
+    const report = await runWithReviewCredentials({ cursorApiKey: parsed.cursorApiKey }, () =>
+      runPrReviewPipeline({
+        owner: parsed.target.owner,
+        repo: parsed.target.repo,
+        pr: parsed.target.pr,
+        token: parsed.token,
+        configPath: path.join(root, "components.yaml"),
+        post: parsed.post,
+        postMicro: parsed.postMicro,
+      })
+    );
     res.json(reviewPayload(report));
   } catch (err) {
     const explained = explainGithubError(err, { action: "read this pull request" });
@@ -194,15 +203,17 @@ app.post("/api/review/stream", async (req, res) => {
   try {
     send({ type: "activity", text: "Starting review…", phase: "start" });
     const report = await runWithReviewProgress(send, () =>
-      runPrReviewPipeline({
-        owner: parsed.target.owner,
-        repo: parsed.target.repo,
-        pr: parsed.target.pr,
-        token: parsed.token,
-        configPath: path.join(root, "components.yaml"),
-        post: parsed.post,
-        postMicro: parsed.postMicro,
-      })
+      runWithReviewCredentials({ cursorApiKey: parsed.cursorApiKey }, () =>
+        runPrReviewPipeline({
+          owner: parsed.target.owner,
+          repo: parsed.target.repo,
+          pr: parsed.target.pr,
+          token: parsed.token,
+          configPath: path.join(root, "components.yaml"),
+          post: parsed.post,
+          postMicro: parsed.postMicro,
+        })
+      )
     );
     send({ type: "done", report: reviewPayload(report) });
   } catch (err) {
