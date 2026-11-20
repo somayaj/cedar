@@ -68,14 +68,14 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/config/env", (req, res) => {
   const githubToken = req.body?.githubToken ?? req.body?.GITHUB_TOKEN;
-  const cursorApiKey = req.body?.cursorApiKey ?? req.body?.CURSOR_API_KEY;
+  const cursorKeyFromBody = req.body?.cursorApiKey ?? req.body?.CURSOR_API_KEY;
   /** @type {Record<string, string>} */
   const updates = {};
   if (typeof githubToken === "string" && githubToken.trim()) {
     updates.GITHUB_TOKEN = githubToken.trim();
   }
-  if (typeof cursorApiKey === "string" && cursorApiKey.trim()) {
-    updates.CURSOR_API_KEY = cursorApiKey.trim();
+  if (typeof cursorKeyFromBody === "string" && cursorKeyFromBody.trim()) {
+    updates.CURSOR_API_KEY = cursorKeyFromBody.trim();
   }
   if (!Object.keys(updates).length) {
     res.status(400).json({
