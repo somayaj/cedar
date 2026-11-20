@@ -123,6 +123,8 @@ function buildComponentsClassDiagram(layers, registry, sliceNums) {
   }
 
   const lines = ["classDiagram", layers.length <= 4 ? "  direction LR" : "  direction TB"];
+  /** @type {Set<string>} */
+  const classIds = new Set();
 
   const sliceNum = (layerId, fallback) =>
     sliceNums.get(normalizeSliceId(layerId)) ?? fallback;
@@ -134,6 +136,7 @@ function buildComponentsClassDiagram(layers, registry, sliceNums) {
     if (!layerTypes.length) {
       const className = registry.layerToAnchor.get(layer.id);
       if (!className) continue;
+      classIds.add(className);
       lines.push(`  class ${className}["${mermaidSafeText(layer.name)}"]`);
       if (layer.summary) lines.push(`  ${className} : ${mermaidSafeText(layer.summary)}`);
       lines.push(`  ${className} : ${mermaidSafeText(`slice #${num}`)}`);
@@ -144,6 +147,7 @@ function buildComponentsClassDiagram(layers, registry, sliceNums) {
       const typeName = layerTypes[i];
       const className = registry.typeToMermaidId.get(typeName);
       if (!className) continue;
+      classIds.add(className);
       lines.push(`  class ${className}["${mermaidSafeText(typeName)}"]`);
       if (layer.summary && i === 0) lines.push(`  ${className} : ${mermaidSafeText(layer.summary)}`);
       lines.push(`  ${className} : ${mermaidSafeText(`slice #${num}`)}`);
@@ -164,6 +168,15 @@ function buildComponentsClassDiagram(layers, registry, sliceNums) {
           lines.push(`  ${from} ..> ${to} : uses`);
         }
       }
+    }
+  }
+
+  if (classIds.size) {
+    lines.push(
+      "  classDef cedarType fill:#141414,stroke:#737373,stroke-width:1.5px,color:#f5f5f5,font-weight:500"
+    );
+    for (const id of classIds) {
+      lines.push(`  class ${id} cedarType`);
     }
   }
 

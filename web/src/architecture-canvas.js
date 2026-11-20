@@ -195,6 +195,8 @@ function mountCy(container, graph) {
       minZoom: 0.2,
       maxZoom: 2.25,
       wheelSensitivity: 0.2,
+      userPanningEnabled: true,
+      userZoomingEnabled: true,
       boxSelectionEnabled: false,
       pixelRatio: Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio : 1),
     });

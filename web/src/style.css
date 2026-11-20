@@ -322,8 +322,19 @@
     cursor: grab;
   }
 
-  .cedar-complete-layout-views .cedar-layout-view .diagram-overview-read.diagram-stage-canvas:active {
+  .cedar-complete-layout-views .cedar-layout-view .diagram-overview-read.diagram-stage-canvas:active,
+  .cedar-complete-layout-views .cedar-layout-view .diagram-overview-read.diagram-stage-canvas.is-diagram-panning {
     cursor: grabbing;
+  }
+
+  .cedar-cy-host .mermaid-rendered,
+  .cedar-cy-host .cedar-mermaid-source {
+    @apply p-1 sm:p-2;
+  }
+
+  .cedar-cy-host .mermaid-rendered svg text,
+  .cedar-cy-host .cedar-mermaid-source svg text {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;
   }
 
   .cedar-complete-layout-views .cedar-layout-view .cedar-mermaid-source,

@@ -83,6 +83,73 @@ function wireDiagramWheelZoom(wrap, stage) {
   );
 }
 
+/** @type {WeakSet<HTMLElement>} */
+const dragPanByStage = new WeakSet();
+
+/**
+ * Pointer-drag pan on scrollable diagram stages (like Cytoscape overview pan).
+ * @param {HTMLElement} stage
+ */
+function wireDiagramDragPan(stage) {
+  if (dragPanByStage.has(stage)) return;
+  dragPanByStage.add(stage);
+
+  let panning = false;
+  let startX = 0;
+  let startY = 0;
+  let scrollLeft0 = 0;
+  let scrollTop0 = 0;
+  /** @type {number | null} */
+  let pointerId = null;
+
+  stage.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.button !== 0) return;
+      if (e.target instanceof Element && e.target.closest("a, button, input, textarea")) return;
+      panning = true;
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
+      scrollLeft0 = stage.scrollLeft;
+      scrollTop0 = stage.scrollTop;
+      stage.classList.add("is-diagram-panning");
+      stage.setPointerCapture(e.pointerId);
+    },
+    { passive: true }
+  );
+
+  stage.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!panning || pointerId !== e.pointerId) return;
+      stage.scrollLeft = scrollLeft0 - (e.clientX - startX);
+      stage.scrollTop = scrollTop0 - (e.clientY - startY);
+    },
+    { passive: true }
+  );
+
+  const endPan = (e) => {
+    if (!panning || (pointerId !== null && e.pointerId !== pointerId)) return;
+    panning = false;
+    pointerId = null;
+    stage.classList.remove("is-diagram-panning");
+    try {
+      stage.releasePointerCapture(e.pointerId);
+    } catch {
+      /* */
+    }
+  };
+
+  stage.addEventListener("pointerup", endPan);
+  stage.addEventListener("pointercancel", endPan);
+  stage.addEventListener("lostpointercapture", () => {
+    panning = false;
+    pointerId = null;
+    stage.classList.remove("is-diagram-panning");
+  });
+}
+
 async function ensureMermaid() {
   if (mermaidBooted && mermaidApi) return mermaidApi;
   const mod = await import("mermaid");
@@ -99,11 +166,31 @@ async function ensureMermaid() {
       primaryColor: "#141414",
       primaryTextColor: "#f5f5f5",
       primaryBorderColor: "#737373",
-      lineColor: "#525252",
-      secondaryColor: "#0a0a0a",
+      secondaryColor: "#101010",
+      secondaryTextColor: "#e5e5e5",
+      secondaryBorderColor: "#525252",
       tertiaryColor: "#fafafa",
+      tertiaryTextColor: "#0a0a0a",
+      tertiaryBorderColor: "#0a0a0a",
+      lineColor: "#525252",
+      textColor: "#f5f5f5",
+      mainBkg: "#141414",
+      nodeBorder: "#737373",
+      clusterBkg: "#0a0a0a",
+      clusterBorder: "#404040",
+      titleColor: "#fafafa",
+      edgeLabelBackground: "#101010",
+      actorBkg: "#141414",
+      actorBorder: "#737373",
+      actorTextColor: "#f5f5f5",
+      actorLineColor: "#525252",
+      signalColor: "#a3a3a3",
+      signalTextColor: "#f5f5f5",
+      labelBoxBkgColor: "#141414",
+      labelBoxBorderColor: "#737373",
+      labelTextColor: "#e5e5e5",
       fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-      fontSize: "13px",
+      fontSize: "11px",
     },
     securityLevel: "loose",
   });
@@ -457,6 +544,7 @@ function mountLayoutMermaidScrollable(wrap, pre) {
   }
 
   wireDiagramWheelZoom(wrap, stage);
+  wireDiagramDragPan(stage);
 }
 
 /**
