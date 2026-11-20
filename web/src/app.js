@@ -22,6 +22,14 @@ import {
 } from "./diagram-ux.js";
 import { applyReviewStreamEvent, postReviewStream } from "./review-stream.js";
 import { buildPrChatContext, wirePrChatSidebar } from "./pr-chat.js";
+import {
+  countActiveFindings,
+  ensureFindingSession,
+  findingKey,
+  isFindingIgnored,
+  setFindingToast,
+  wireFindingActions,
+} from "./finding-actions.js";
 
 /**
  * @param {string} [status]
@@ -83,6 +91,7 @@ function showToast(message, tone = "neutral") {
 
 export function mountApp(root) {
   setCommentToast((message, tone) => showToast(message, tone === "error" ? "error" : "neutral"));
+  setFindingToast((message, tone) => showToast(message, tone === "error" ? "error" : "neutral"));
 
   root.innerHTML = `
     <div class="cedar-shell">
@@ -245,11 +254,13 @@ async function onSubmit(e) {
       token: payload.token,
       data,
       sliceApprovals: new Set(),
+      ignoredFindings: new Set(),
+      findingCommentsPosted: new Set(),
       filePatches,
     };
+    ensureFindingSession(window.__cedarSession);
 
     renderResults(results, data);
-    bindApproveHandlers(results);
   } catch (err) {
     results.innerHTML = "";
     results.classList.add("hidden");
@@ -274,9 +285,25 @@ function loadingSkeleton() {
 
 let sliceApprovals = new Set();
 
+function finishReviewUi(container) {
+  bindApproveHandlers(container);
+  wireFindingActions(container, refreshReviewUi);
+  wireFileReviewToggles(container);
+  void loadDiffReviewComments(container);
+}
+
+function refreshReviewUi() {
+  const session = window.__cedarSession;
+  const results = document.getElementById("results");
+  if (!session?.data || !results) return;
+  ensureFindingSession(session);
+  sliceApprovals = session.sliceApprovals ?? sliceApprovals;
+  renderResults(results, session.data);
+}
+
 function mergeConfidence(gate, microResults) {
-  const blockers = microResults.reduce((n, r) => n + r.findings.filter((f) => f.severity === "blocker").length, 0);
-  const warnings = microResults.reduce((n, r) => n + r.findings.filter((f) => f.severity === "warning").length, 0);
+  const blockers = countActiveFindings(microResults, "blocker");
+  const warnings = countActiveFindings(microResults, "warning");
   if (blockers > 0) return { score: 1, label: "High risk", color: "text-rose-400" };
   if (!gate.ready) return { score: 2, label: "In progress", color: "text-amber-300" };
   if (warnings > 3) return { score: 3, label: "Review carefully", color: "text-amber-200" };
@@ -803,6 +830,7 @@ function wireSliceTabs(root, initialSliceId = "") {
 function renderResults(container, data) {
   const { pull, gate, microPrs, microResults, composite, breakouts, partition, process, target } = data;
   sliceApprovals = window.__cedarSession?.sliceApprovals ?? sliceApprovals;
+  ensureFindingSession(window.__cedarSession);
 
   const confidence = mergeConfidence(gate, microResults);
   const touched = microResults.filter((r) => r.status !== "skipped");
@@ -952,26 +980,53 @@ function renderResults(container, data) {
     .map((r, i) => {
       const micro = microPrs.find((m) => m.componentId === r.componentId);
       const rationale = micro?.rationale ?? micro?.description;
-      const blockers = r.findings.filter((f) => f.severity === "blocker").length;
-      const warnings = r.findings.filter((f) => f.severity === "warning").length;
+      const activeFindings = r.findings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
+      const blockers = activeFindings.filter((f) => f.severity === "blocker").length;
+      const warnings = activeFindings.filter((f) => f.severity === "warning").length;
       const approved = sliceApprovals.has(r.componentId);
       const vpr = virtualPrLabel(target, pull, r.componentId, i + 1, sliceTotal);
       const fileList = micro?.files ?? [];
+      const posted = window.__cedarSession?.findingCommentsPosted ?? new Set();
 
       const findings =
         r.findings.length === 0
           ? `<p class="text-sm italic text-zinc-600">Clean virtual PR — no findings.</p>`
-          : `<ul class="space-y-2">${r.findings
-              .slice(0, 12)
-              .map(
-                (f) => `<li class="cedar-glass-subtle px-4 py-3">
+          : `<ul class="cedar-findings-list space-y-2">${r.findings
+              .slice(0, 20)
+              .map((f, fi) => {
+                const key = findingKey(r.componentId, f, fi);
+                const ignored = isFindingIgnored(key);
+                const onGithub = posted.has(key);
+                const fileBtn = f.filename
+                  ? `<button type="button" class="cedar-finding-file cedar-btn-link text-[11px]" data-finding-jump data-filename="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</button>`
+                  : "";
+                return `<li class="cedar-finding-card cedar-glass-subtle px-4 py-3${ignored ? " is-ignored" : ""}" data-finding-key="${escapeHtml(key)}">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="${severityClass(f.severity)}">${f.severity}</span>
-                  ${f.filename ? `<span class="font-mono text-[11px] text-zinc-500">${escapeHtml(f.filename)}</span>` : ""}
+                  ${fileBtn}
+                  ${ignored ? '<span class="cedar-badge cedar-badge-muted">Ignored</span>' : ""}
+                  ${onGithub ? '<span class="cedar-badge cedar-badge-ok">On GitHub</span>' : ""}
                 </div>
-                <p class="mt-2 text-sm leading-relaxed text-zinc-300">${escapeHtml(f.message)}</p>
-              </li>`
-              )
+                <p class="cedar-finding-message mt-2 text-sm leading-relaxed text-zinc-300">${escapeHtml(f.message)}</p>
+                <div class="cedar-finding-actions mt-3 flex flex-wrap gap-2">
+                  ${
+                    ignored
+                      ? `<button type="button" class="cedar-btn-secondary cedar-btn-compact" data-finding-unignore data-finding-key="${escapeHtml(key)}">Restore</button>`
+                      : `<button type="button" class="cedar-btn-secondary cedar-btn-compact" data-finding-ignore data-finding-key="${escapeHtml(key)}">Ignore</button>`
+                  }
+                  <button type="button" class="cedar-btn-secondary cedar-btn-compact" data-finding-comment
+                    data-finding-key="${escapeHtml(key)}"
+                    data-filename="${escapeHtml(f.filename ?? "")}"
+                    data-finding-severity="${escapeHtml(f.severity)}"
+                    data-finding-rule="${escapeHtml(f.ruleId ?? "finding")}"
+                    data-finding-message="${escapeHtml(f.message)}"
+                    data-component-id="${escapeHtml(r.componentId)}"
+                    data-component-name="${escapeHtml(r.componentName)}"
+                    ${!f.filename || onGithub ? "disabled" : ""}
+                    title="${f.filename ? "Post as inline review comment on GitHub" : "No file path for this finding"}">${onGithub ? "Comment posted" : "Save as comment"}</button>
+                </div>
+              </li>`;
+              })
               .join("")}</ul>`;
 
       return `
@@ -1009,8 +1064,10 @@ function renderResults(container, data) {
           </div>
           <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
             ${renderSliceFileReviews(fileList, pull.url)}
-            <details class="group">
-              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Review findings</summary>
+            <details class="group cedar-findings-panel"${activeFindings.length ? " open" : ""}>
+              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Review findings${
+                activeFindings.length ? ` (${activeFindings.length})` : ""
+              }</summary>
               <div class="mt-3">${findings}</div>
             </details>
           </div>
@@ -1283,8 +1340,7 @@ function renderResults(container, data) {
     getToken: () => window.__cedarSession?.token,
   });
 
-  wireFileReviewToggles(container);
-  void loadDiffReviewComments(container);
+  finishReviewUi(container);
 }
 
 function bindApproveHandlers(root) {
@@ -1302,9 +1358,7 @@ function approveSlice(btn) {
 
   session.sliceApprovals.add(componentId);
   showToast(`Marked approved · ${btn.dataset.componentName ?? componentId}`);
-  const results = document.getElementById("results");
-  renderResults(results, session.data);
-  bindApproveHandlers(results);
+  refreshReviewUi();
 }
 
 async function approveFullPr() {

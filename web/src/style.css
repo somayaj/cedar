@@ -493,7 +493,7 @@
   }
 
   .cedar-file-change-badge {
-    @apply inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold leading-none tracking-[0.04em];
+    @apply inline-flex shrink-0 items-center rounded-full border px-2 py-px text-[8px] font-semibold leading-none tracking-[0.03em];
     box-shadow: 0 1px 0 rgb(0 0 0 / 0.2);
     font-family: var(--font-sans);
     text-transform: none;
@@ -501,8 +501,13 @@
 
   .cedar-diff2html .d2h-tag.cedar-diff2html-file-badge {
     display: inline-flex !important;
-    margin-left: 0.5rem;
-    padding: 0.125rem 0.55rem;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.35rem !important;
+    font-family: var(--font-sans) !important;
+    font-size: 8px !important;
+    font-weight: 600 !important;
+    line-height: 1.15 !important;
+    letter-spacing: 0.03em;
     background-color: transparent;
     background-image: none;
     vertical-align: middle;
@@ -1395,6 +1400,14 @@
 
   .cedar-gh-file-toggle {
     @apply inline-flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-xs transition hover:border-white/10 hover:bg-white/5;
+  }
+
+  .cedar-finding-card.is-ignored .cedar-finding-message {
+    @apply text-zinc-500 line-through decoration-zinc-600;
+  }
+
+  .cedar-btn-link {
+    @apply border-0 bg-transparent p-0 font-mono text-sky-400/90 underline-offset-2 hover:text-sky-300 hover:underline;
   }
 
   .severity-blocker {
