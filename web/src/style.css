@@ -1326,6 +1326,11 @@
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
   }
 
+  .cedar-diff-comment-card--cursor {
+    border-color: rgba(52, 211, 153, 0.22);
+    background: rgba(16, 185, 129, 0.06);
+  }
+
   .cedar-diff-comment-card + .cedar-diff-comment-card {
     margin-top: 0.65rem;
     padding-top: 0.65rem;

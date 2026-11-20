@@ -12,7 +12,7 @@ import {
 } from "../../src/architecture-model.js";
 import { buildPrArchitectureLayers } from "../../src/pr-architecture-layers.js";
 import { renderSliceFileReviews, wireFileReviewToggles } from "./diff-view.js";
-import { loadDiffReviewComments, setCommentToast } from "./diff-comments.js";
+import { loadDiffReviewComments, repaintAllDiffComments, setCommentToast } from "./diff-comments.js";
 import { initDiffFontFromServer } from "./diff-font.js";
 import {
   mountCompleteLayoutViews,
@@ -423,6 +423,7 @@ function finishReviewUi(container) {
   wireFindingActions(container, patchFindingsAndMetrics);
   wireFileReviewToggles(container);
   wireMacroReviewPost(container);
+  repaintAllDiffComments(container);
   void loadDiffReviewComments(container);
 }
 
@@ -438,6 +439,8 @@ function refreshReviewUi() {
 window.__cedarPatchFindings = patchFindingsAndMetrics;
 
 function patchFindingsAndMetrics() {
+  const results = document.getElementById("results");
+  if (results) repaintAllDiffComments(results);
   const session = window.__cedarSession;
   const container = document.getElementById("results");
   if (!session?.data || !container) return;

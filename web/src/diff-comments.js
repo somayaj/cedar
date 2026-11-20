@@ -1,4 +1,8 @@
-/** @typedef {{ id: number, path: string, line: number, side: string, body: string, html_url?: string, user?: string | null, created_at?: string }} ReviewComment */
+import { collectCursorDraftCommentsForDiff } from "./cursor-diff-comments.js";
+
+export { collectCursorDraftCommentsForDiff };
+
+/** @typedef {{ id: number, path: string, line: number, side: string, body: string, html_url?: string, user?: string | null, created_at?: string, source?: "github" | "cursor", findingKey?: string }} ReviewComment */
 
 /** @typedef {{ prUrl: string, token?: string, reviewComments?: ReviewComment[], data: { target?: { owner?: string, repo?: string, pr?: number }, pull?: { headSha?: string } } }} CedarSession */
 
@@ -212,6 +216,16 @@ function getSessionComments() {
 }
 
 /**
+ * GitHub inline + Composer Cursor drafts for diff painting.
+ * @returns {ReviewComment[]}
+ */
+export function getCommentsForDiffPaint() {
+  const github = getSessionComments().map((c) => ({ ...c, source: /** @type {const} */ ("github") }));
+  const cursor = collectCursorDraftCommentsForDiff();
+  return [...github, ...cursor];
+}
+
+/**
  * @param {ReviewComment} comment
  */
 function upsertSessionComment(comment) {
@@ -245,14 +259,20 @@ function commentsByAnchor(comments) {
 function renderCommentThreadSlide(items) {
   const cards = items
     .map((c) => {
-      const who = c.user ? `@${escapeHtml(c.user)}` : "Reviewer";
-      const when = c.created_at ? escapeHtml(new Date(c.created_at).toLocaleString()) : "";
+      const isCursor = c.source === "cursor";
+      const who = isCursor
+        ? `<span class="cedar-diff-comment-card-user"><span class="cedar-badge cedar-badge-ok text-[9px]">Cursor</span> Draft</span>`
+        : c.user
+          ? `<span class="cedar-diff-comment-card-user">@${escapeHtml(c.user)}</span>`
+          : `<span class="cedar-diff-comment-card-user">Reviewer</span>`;
+      const when = !isCursor && c.created_at ? escapeHtml(new Date(c.created_at).toLocaleString()) : "";
       const link = c.html_url
         ? `<a class="cedar-diff-comment-thread-link" href="${escapeHtml(c.html_url)}" target="_blank" rel="noreferrer">Open on GitHub</a>`
         : "";
-      return `<article class="cedar-diff-comment-card">
+      const cardClass = isCursor ? "cedar-diff-comment-card cedar-diff-comment-card--cursor" : "cedar-diff-comment-card";
+      return `<article class="${cardClass}">
         <header class="cedar-diff-comment-card-head">
-          <span class="cedar-diff-comment-card-user">${who}</span>
+          ${who}
           ${when ? `<span class="cedar-diff-comment-card-time">${when}</span>` : ""}
           ${link}
         </header>
@@ -413,8 +433,8 @@ function paintCommentsForBody(body, comments, path) {
 /**
  * @param {ParentNode} root
  */
-function repaintAllDiffComments(root) {
-  const comments = getSessionComments();
+export function repaintAllDiffComments(root) {
+  const comments = getCommentsForDiffPaint();
   root.querySelectorAll("[data-file-body]").forEach((body) => {
     if (!(body instanceof HTMLElement)) return;
     const path = body.closest("[data-file-review]")?.getAttribute("data-file-path");
@@ -551,8 +571,9 @@ export function wireDiffComments(root) {
     if (!(body instanceof HTMLElement)) return;
     wireDiffBodyComments(body);
     const path = body.closest("[data-file-review]")?.getAttribute("data-file-path");
-    if (path && getSessionComments().length) {
-      paintCommentsForBody(body, getSessionComments(), path);
+    if (path) {
+      const merged = getCommentsForDiffPaint();
+      if (merged.length) paintCommentsForBody(body, merged, path);
     }
   });
 }
