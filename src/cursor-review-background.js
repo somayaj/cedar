@@ -93,6 +93,13 @@ export async function runBackgroundCursorReview(opts) {
       text: `Cursor · ${sliceLabel}`,
       phase: "cursor-slices",
     });
+    emit({
+      type: "cursor_progress",
+      completed: slicePassIndex - 1,
+      total: ordered.length,
+      phase: "slice",
+      detail: `Slice ${slicePassIndex} of ${ordered.length} · ${micro.componentName}…`,
+    });
     emitPhase("cursor-slices", "Cursor · slice review", "running", sliceLabel);
 
     try {
@@ -112,6 +119,7 @@ export async function runBackgroundCursorReview(opts) {
         completed: slicePassIndex,
         total: ordered.length,
         phase: "slice",
+        detail: `${slicePassIndex} of ${ordered.length} slices · ${valid.length} finding(s)`,
       });
       emit({
         type: "cursor_slice",
@@ -132,6 +140,7 @@ export async function runBackgroundCursorReview(opts) {
         completed: slicePassIndex,
         total: ordered.length,
         phase: "slice",
+        detail: `${slicePassIndex} of ${ordered.length} slices`,
       });
       emit({
         type: "cursor_slice",

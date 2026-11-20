@@ -1,9 +1,16 @@
-/** @type {{ totalSlices: number, completedSlices: number, phase: string }} */
+/** @type {{ totalSlices: number, completedSlices: number, phase: string, incrementalSlices: boolean }} */
 const state = {
   totalSlices: 0,
   completedSlices: 0,
   phase: "idle",
+  incrementalSlices: false,
 };
+
+/** @type {{ pct: number, label: string, detail: string }} */
+let lastProgress = { pct: 0, label: "Review", detail: "" };
+
+const CURSOR_SLICE_PCT_START = 55;
+const CURSOR_SLICE_PCT_SPAN = 38;
 
 /** @type {Record<string, number>} */
 const PHASE_PCT = {
@@ -37,6 +44,38 @@ export function setReviewProgress(pct, label, detail) {
   if (detailEl) detailEl.textContent = detail ?? "";
   if (pctEl) pctEl.textContent = `${clamped}%`;
   dock.setAttribute("aria-valuenow", String(clamped));
+  lastProgress = { pct: clamped, label, detail: detail ?? "" };
+}
+
+/**
+ * Re-apply last progress after DOM rebuild (e.g. renderResults).
+ */
+export function restoreReviewProgressDock() {
+  const dock = document.getElementById("cedar-review-progress-dock");
+  if (!dock || lastProgress.pct <= 0) return;
+  dock.hidden = false;
+  setReviewProgress(lastProgress.pct, lastProgress.label, lastProgress.detail);
+}
+
+/**
+ * @param {number} completed
+ * @param {number} total
+ * @param {{ inFlight?: boolean }} [opts]
+ */
+function cursorSliceBackgroundPct(completed, total, opts) {
+  const safeTotal = Math.max(1, total);
+  let frac = completed / safeTotal;
+  if (opts?.inFlight) frac = Math.min(1, (completed + 0.35) / safeTotal);
+  return CURSOR_SLICE_PCT_START + frac * CURSOR_SLICE_PCT_SPAN;
+}
+
+/**
+ * @param {string} detail
+ */
+function parseSliceIndexFromDetail(detail) {
+  const m = String(detail).match(/\((\d+)\/(\d+)\)/);
+  if (!m) return null;
+  return { index: Number.parseInt(m[1], 10), total: Number.parseInt(m[2], 10) };
 }
 
 export function showReviewProgressDock() {
@@ -55,6 +94,8 @@ export function hideReviewProgressDock(opts) {
     state.phase = "idle";
     state.totalSlices = 0;
     state.completedSlices = 0;
+    state.incrementalSlices = false;
+    lastProgress = { pct: 0, label: "Review", detail: "" };
   };
   if (opts?.delayMs) setTimeout(hide, opts.delayMs);
   else hide();
@@ -87,22 +128,43 @@ export function applyReviewProgressFromPhaseEvent(event) {
   if (event.status === "running" && id === "breakouts") pct = 18;
   if (event.status === "running" && id === "partition") pct = 32;
   if (event.status === "running" && id === "review") pct = 44;
-  if (event.status === "running" && id === "cursor-slices") pct = 62;
+  if (event.status === "running" && id === "cursor-slices") {
+    const parsed = parseSliceIndexFromDetail(detail);
+    if (parsed) {
+      state.incrementalSlices = true;
+      state.totalSlices = parsed.total;
+      const inFlight = !/finding\(s\)/i.test(detail);
+      const completed = inFlight ? Math.max(0, parsed.index - 1) : parsed.index;
+      state.completedSlices = completed;
+      pct = cursorSliceBackgroundPct(completed, parsed.total, { inFlight });
+    } else if (state.incrementalSlices && state.totalSlices > 0) {
+      pct = cursorSliceBackgroundPct(state.completedSlices, state.totalSlices);
+    } else {
+      pct = 62;
+    }
+  }
   if (event.status === "skipped" && id === "cursor-slices") pct = PHASE_PCT["cursor-slices-skipped"];
-  if (event.status === "running" && id === "macro") pct = 84;
+  if (event.status === "running" && id === "macro") {
+    pct = state.incrementalSlices ? 94 : 84;
+  }
   if (event.status === "skipped" && id === "macro") pct = 58;
   if (event.status === "done" && id === "cursor-report") pct = 98;
   if (pct == null && event.status === "done") pct = PHASE_PCT[id] ?? undefined;
   if (pct != null) {
-    setReviewProgress(pct, label, detail);
+    if (
+      state.incrementalSlices &&
+      id === "cursor-slices" &&
+      event.status === "running" &&
+      lastProgress.pct > pct
+    ) {
+      /* keep slice ramp from cursor_progress / in-flight bumps */
+    } else {
+      setReviewProgress(pct, label, detail);
+    }
     state.phase = id;
   }
-  if (id === "cursor-slices" && event.status === "running" && detail.includes("/")) {
-    const m = detail.match(/\((\d+)\/(\d+)\)/);
-    if (m) {
-      state.completedSlices = Number.parseInt(m[1], 10);
-      state.totalSlices = Number.parseInt(m[2], 10);
-    }
+  if (id === "cursor-slices" && event.status === "done") {
+    if (state.totalSlices > 0) state.completedSlices = state.totalSlices;
   }
 }
 
@@ -114,19 +176,18 @@ export function applyCursorBackgroundProgress(event) {
   const total = Number(event.total) || state.totalSlices || 1;
   const completed = Number(event.completed) || 0;
   const phase = event.phase === "macro" ? "macro" : "cursor-slices";
+  state.incrementalSlices = true;
   state.totalSlices = total;
   state.completedSlices = completed;
-  let pct;
   if (phase === "macro") {
-    pct = 94;
-    setReviewProgress(pct, "Cursor · macro review (entire PR)", "Whole-PR themes in background…");
+    setReviewProgress(94, "Cursor · macro review (entire PR)", "Whole-PR themes in background…");
     return;
   }
-  const sliceSpan = 38;
-  pct = 55 + (completed / total) * sliceSpan;
-  setReviewProgress(
-    pct,
-    "Cursor · slice review (background)",
-    `${completed} of ${total} slices · Composer findings stream in below`
-  );
+  const inFlight = completed < total;
+  const pct = cursorSliceBackgroundPct(completed, total, { inFlight });
+  const detail =
+    typeof event.detail === "string" && event.detail
+      ? event.detail
+      : `${completed} of ${total} slices${inFlight ? " · reviewing…" : ""}`;
+  setReviewProgress(pct, "Cursor · slice review (background)", detail);
 }

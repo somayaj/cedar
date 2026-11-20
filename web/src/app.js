@@ -25,6 +25,7 @@ import { applyCursorBackgroundEvent, postCursorReviewStream } from "./cursor-rev
 import {
   hideReviewProgressDock,
   renderReviewProgressDockHtml,
+  restoreReviewProgressDock,
   setReviewProgress,
   showReviewProgressDock,
 } from "./review-progress-ui.js";
@@ -403,13 +404,19 @@ async function onSubmit(e) {
     };
     ensureFindingSession(window.__cedarSession);
 
+    renderResults(results, data);
     if (!data.cursorReviewPending) {
       setReviewProgress(100, "Review ready", "Architecture and slices loaded.");
       hideReviewProgressDock({ delayMs: 2000 });
     } else {
-      setReviewProgress(58, "PR layout ready", "Cursor slice + macro review running in background…");
+      const sliceTotal = (data.microPrs ?? []).filter((m) => (m.files?.length ?? m.fileCount ?? 0) > 0).length;
+      showReviewProgressDock();
+      setReviewProgress(
+        55,
+        "Cursor · slice review (background)",
+        `0 of ${sliceTotal} slices · layout ready`
+      );
     }
-    renderResults(results, data);
   } catch (err) {
     results.innerHTML = "";
     results.classList.add("hidden");
@@ -470,7 +477,6 @@ async function startBackgroundCursorReviewIfNeeded(container) {
   };
 
   const onEvent = (event) => {
-    applyReviewStreamEvent(event, null, null);
     applyCursorBackgroundEvent(event, () => {
       if (event.type === "cursor_slice") {
         patchFindingsAndMetrics();
@@ -484,6 +490,7 @@ async function startBackgroundCursorReviewIfNeeded(container) {
         }
       }
     });
+    applyReviewStreamEvent(event, null, null);
   };
 
   try {
@@ -1684,6 +1691,7 @@ function renderResults(container, data) {
     getToken: () => window.__cedarSession?.token,
   });
 
+  if (data.cursorReviewPending) restoreReviewProgressDock();
   finishReviewUi(container);
 }
 
