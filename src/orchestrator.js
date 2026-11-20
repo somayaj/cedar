@@ -25,6 +25,7 @@ import {
 } from "./architecture-layout-views.js";
 import { normalizeSliceId } from "./architecture-model.js";
 import { sliceReviewAiAvailable, resolveAiProviderName } from "./ai-credentials.js";
+import { sliceReviewRequested } from "./slice-review-toggle.js";
 import { renderReviewDiagrams } from "./diagram-graphviz.js";
 import { orderMicroPrsForLayout } from "./diagram-layout.js";
 import { buildDiagramGraph } from "./diagram-graph.js";
@@ -75,11 +76,7 @@ export async function runPrReviewPipeline(opts) {
   phase("fetch", "Fetch PR from GitHub", "done", `${files.length} files`);
 
   const useAiBreakouts = resolvePartitionMode(opts.partitionMode) === "ai";
-  const aiReviewEnv = String(process.env.CEDAR_AI_SLICE_REVIEW ?? "").trim().toLowerCase();
-  const useAiReview =
-    opts.useAiReview ??
-    (aiReviewEnv === "true" ||
-      (sliceReviewAiAvailable() && aiReviewEnv !== "false" && aiReviewEnv !== "0"));
+  const useAiReview = sliceReviewRequested(opts.useAiReview);
 
   /** @type {import('./ai-breakouts.js').AiBreakoutPlan | null} */
   let breakoutPlan = null;
@@ -521,6 +518,26 @@ async function runMicroReviewPass(ordered, ctx) {
           phase: "error",
         });
       }
+    } else if (sliceReviewAiAvailable() && !ctx.useAiReview && micro.files.length) {
+      result = {
+        ...result,
+        cursorReview: {
+          source: "cursor",
+          count: 0,
+          status: "skipped",
+          error: "CEDAR_AI_SLICE_REVIEW=false (breakouts still use Cursor)",
+        },
+      };
+    } else if (cursorEnabled && aiSliceReviewStopped && micro.files.length) {
+      result = {
+        ...result,
+        cursorReview: {
+          source: "cursor",
+          count: 0,
+          status: "stopped",
+          error: "Composer slice review stopped after an earlier auth/API error",
+        },
+      };
     }
 
     microResults.push(result);

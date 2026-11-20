@@ -16,6 +16,7 @@ import {
 } from "./default-model.js";
 import { activeAiProvider, hasAiProvider } from "./ai-chat.js";
 import { cursorApiKey, openRouterApiKey } from "./ai-credentials.js";
+import { sliceReviewRequested } from "./slice-review-toggle.js";
 import { answerPrChatQuestion, prChatProviderLabel } from "./pr-chat.js";
 import { cedarAiDiagramMode } from "./diagram-visual-mode.js";
 import { ensureCursorBridge, bridgeBaseUrl, isBridgeManaged } from "./cursor-bridge-spawn.js";
@@ -39,6 +40,8 @@ app.get("/api/health", (_req, res) => {
     hasOpenRouter: Boolean(openRouterApiKey()),
     aiProvider: activeAiProvider(),
     sliceReviewProvider: cursorApiKey() ? "cursor" : null,
+    sliceReviewOn: sliceReviewRequested(),
+    sliceReviewAvailable: Boolean(cursorApiKey()),
     prChat: hasAiProvider(),
     cursorBridge:
       process.env.CEDAR_CURSOR_BRIDGE === "false"

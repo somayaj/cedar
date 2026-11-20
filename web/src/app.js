@@ -246,6 +246,13 @@ async function onSubmit(e) {
     };
     const data = await postReviewStream(payload, onStream);
 
+    try {
+      const healthRes = await fetch("/api/health");
+      window.__cedarServerHealth = await healthRes.json();
+    } catch {
+      /* keep prior health */
+    }
+
     const filePatches = new Map();
     for (const m of data.microPrs ?? []) {
       for (const f of m.files ?? []) {
@@ -257,6 +264,7 @@ async function onSubmit(e) {
       prUrl: payload.prUrl,
       token: payload.token,
       data,
+      serverHealth: window.__cedarServerHealth,
       sliceApprovals: new Set(),
       ignoredFindings: new Set(),
       findingCommentsPosted: new Set(),

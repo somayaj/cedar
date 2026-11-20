@@ -1,5 +1,6 @@
 import { isCodeReviewFinding } from "./finding-meta.js";
 import { sliceReviewAiAvailable } from "./ai-credentials.js";
+import { sliceReviewRequested } from "./slice-review-toggle.js";
 
 /**
  * @param {import('./review-engine.js').MicroReviewResult[]} microResults
@@ -38,12 +39,16 @@ export function summarizeCursorSliceReview(microResults) {
  * @param {boolean} useAiReview
  */
 export function buildCursorReviewSummary(microResults, macroReview, useAiReview) {
-  const enabled = Boolean(useAiReview && sliceReviewAiAvailable());
+  const available = sliceReviewAiAvailable();
+  const requested = Boolean(useAiReview);
+  const enabled = Boolean(requested && available);
   const slice = summarizeCursorSliceReview(microResults);
   const macroFindingCount = Array.isArray(macroReview?.findings) ? macroReview.findings.length : 0;
 
   return {
     enabled,
+    requested,
+    available,
     slice,
     macro: macroReview
       ? {

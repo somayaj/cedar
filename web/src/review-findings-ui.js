@@ -85,14 +85,27 @@ function renderCommentCard(f, r, fi, posted) {
  * @param {{ data?: { cursorReviewSummary?: { enabled?: boolean } }, findingCommentsPosted?: Set<string> } | undefined} session
  */
 function sliceCursorEmptyMessage(r, session) {
-  const health = typeof window !== "undefined" ? window.__cedarServerHealth : null;
-  const summary = session?.data?.cursorReviewSummary;
-  const cursorConfigured = Boolean(health?.hasCursor && health?.sliceReviewProvider === "cursor");
+  const health =
+    session?.serverHealth ??
+    (typeof window !== "undefined" ? window.__cedarServerHealth : null);
+  const data = session?.data;
+  const summary = data?.cursorReviewSummary;
+  const hasCursorKey = Boolean(
+    summary?.available ??
+      health?.hasCursor ??
+      health?.sliceReviewAvailable ??
+      data?.partition?.mode === "ai"
+  );
   const cr = r.cursorReview;
   const rawComments = Array.isArray(r.reviewComments) ? r.reviewComments.length : 0;
 
   if (r.status === "skipped" || (r.filesReviewed ?? 0) === 0) {
     return "No changed files in this slice — Cursor line comments are not generated here.";
+  }
+
+  if (cr?.status === "skipped") {
+    const hint = cr.error ? ` ${escapeHtml(cr.error)}` : "";
+    return `Per-slice Composer review is <strong class="font-medium text-zinc-400">off</strong> for this run.${hint} Architectural breakouts can still use Cursor. Remove <span class="font-mono text-zinc-600">CEDAR_AI_SLICE_REVIEW=false</span> from <span class="font-mono text-zinc-600">.env</span>, restart <span class="font-mono text-zinc-600">npm run dev:api</span>, then <strong class="font-medium text-zinc-400">Start review</strong>.`;
   }
 
   if (cr?.status === "error" || cr?.status === "stopped") {
@@ -108,14 +121,18 @@ function sliceCursorEmptyMessage(r, session) {
     return `Composer returned ${rawComments} comment(s) but none could be anchored to this diff (filename/line mismatch). Re-run <strong class="font-medium text-zinc-400">Start review</strong> or check server logs.`;
   }
 
-  if (summary?.enabled || cursorConfigured) {
+  if (hasCursorKey && summary && summary.requested === false) {
+    return `Your Cursor key is loaded on the API, but <strong class="font-medium text-zinc-400">per-slice</strong> review is disabled (<span class="font-mono text-zinc-600">CEDAR_AI_SLICE_REVIEW=false</span>). Slices/breakouts still use Cursor. Unset that flag, restart the API, and run <strong class="font-medium text-zinc-400">Start review</strong>.`;
+  }
+
+  if (hasCursorKey) {
     if (!cr) {
-      return `This review has no Cursor slice pass for this component — run <strong class="font-medium text-zinc-400">Start review</strong> again after restarting <span class="font-mono text-zinc-600">npm run dev:api</span> (your API key is already loaded).`;
+      return `Cursor is configured on the API (breakouts/macros may still run), but this slice has no Composer pass from the last review. Run <strong class="font-medium text-zinc-400">Start review</strong> again and watch <strong class="font-medium text-zinc-400">Cursor · slice review</strong> in the progress log.`;
     }
     return `No Cursor draft comments for this slice. GitHub inline comments, if any, stay on the diff only.`;
   }
 
-  return `Cursor slice review did not run (no <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> on the API or <span class="font-mono text-zinc-600">CEDAR_AI_SLICE_REVIEW=false</span>). Add the key to <span class="font-mono text-zinc-600">.env</span> and run <strong class="font-medium text-zinc-400">Start review</strong>.`;
+  return `This Cedar API process does not see <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> (restart <span class="font-mono text-zinc-600">npm run dev:api</span> after editing <span class="font-mono text-zinc-600">.env</span>), then <strong class="font-medium text-zinc-400">Start review</strong>.`;
 }
 
 /**
