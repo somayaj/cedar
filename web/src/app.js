@@ -1145,14 +1145,6 @@ function renderResults(container, data) {
           </div>`
                 : ""
             }
-            ${
-              composite
-                ? `<details class="mt-6 group"${architectureReadSummary ? "" : " open"}>
-                <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Complete composite markdown</summary>
-                <pre class="mt-3 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-xl border border-white/[0.04] bg-black/40 p-5 font-mono text-xs leading-relaxed text-zinc-400">${escapeHtml(composite.body)}</pre>
-              </details>`
-                : ""
-            }
           </section>`
                 : !breakouts?.architectureSummary
                   ? `<p class="text-sm text-zinc-500">Architecture narrative and diagrams appear once partitioning finishes.</p>`
