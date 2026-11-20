@@ -168,7 +168,12 @@ export function renderSliceFileReviews(files, pullUrl = "") {
           <p class="cedar-label mb-0">Files changed</p>
           <p class="mt-1 text-[8px] text-zinc-600">Click a line or + in the gutter · posts to GitHub</p>
         </div>
-        ${renderDiffFontControl(fontPreset)}
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="cedar-btn-secondary cedar-btn-compact cedar-diff-comments-visibility" data-comments-toggle aria-pressed="true">
+            Hide comments
+          </button>
+          ${renderDiffFontControl(fontPreset)}
+        </div>
       </div>
       ${cards}
     </div>`;
@@ -179,6 +184,32 @@ export function renderSliceFileReviews(files, pullUrl = "") {
  */
 function encodeGitHubAnchor(path) {
   return path.replace(/\//g, "-").replace(/\./g, "-");
+}
+
+const D2H_STATUS_BADGE = [
+  { match: "d2h-added-tag", kind: "added", label: "Added" },
+  { match: "d2h-changed-tag", kind: "changed", label: "Changed" },
+  { match: "d2h-deleted-tag", kind: "deleted", label: "Deleted" },
+  { match: "d2h-moved-tag", kind: "renamed", label: "Renamed" },
+];
+
+/**
+ * @param {ParentNode} root
+ */
+function styleDiffFileStatusTags(root) {
+  root.querySelectorAll(".cedar-diff2html .d2h-tag").forEach((tag) => {
+    if (!(tag instanceof HTMLElement)) return;
+    if (tag.dataset.cedarFileBadge) return;
+    tag.dataset.cedarFileBadge = "1";
+    tag.classList.add("cedar-badge", "cedar-file-change-badge", "cedar-diff2html-file-badge");
+    for (const spec of D2H_STATUS_BADGE) {
+      if (tag.classList.contains(spec.match)) {
+        tag.classList.add(`cedar-file-change-badge--${spec.kind}`);
+        tag.textContent = spec.label;
+        break;
+      }
+    }
+  });
 }
 
 /**
@@ -194,6 +225,7 @@ export function wireFileReviewToggles(root) {
     article.querySelectorAll(".d2h-file-header").forEach((header) => {
       header.classList.add("d2h-sticky-header");
     });
+    styleDiffFileStatusTags(article);
 
     article.querySelectorAll("[data-diff-mode]").forEach((btn) => {
       if (btn.dataset.wiredDiff) return;
@@ -216,6 +248,7 @@ export function wireFileReviewToggles(root) {
           body.querySelectorAll(".d2h-file-header").forEach((header) => {
             header.classList.add("d2h-sticky-header");
           });
+          styleDiffFileStatusTags(body);
           wireDiffComments(body);
         } catch {
           /* keep previous render */

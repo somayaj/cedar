@@ -954,7 +954,6 @@ function renderResults(container, data) {
       const rationale = micro?.rationale ?? micro?.description;
       const blockers = r.findings.filter((f) => f.severity === "blocker").length;
       const warnings = r.findings.filter((f) => f.severity === "warning").length;
-      const canApprove = r.status === "passed" || r.status === "skipped";
       const approved = sliceApprovals.has(r.componentId);
       const vpr = virtualPrLabel(target, pull, r.componentId, i + 1, sliceTotal);
       const fileList = micro?.files ?? [];
@@ -990,7 +989,7 @@ function renderResults(container, data) {
                 <span class="cedar-badge cedar-badge-muted">${fileList.length} files</span>
                 ${blockers ? `<span class="cedar-badge border-rose-500/30 bg-rose-500/10 text-rose-200">${blockers} blockers</span>` : ""}
                 ${warnings ? `<span class="cedar-badge cedar-badge-warn">${warnings} warnings</span>` : ""}
-                ${approved ? `<span class="cedar-badge cedar-badge-ok">Signed off</span>` : ""}
+                ${approved ? `<span class="cedar-badge cedar-badge-ok">Approved</span>` : ""}
               </div>
               ${
                 rationale
@@ -1002,9 +1001,10 @@ function renderResults(container, data) {
               }
             </div>
             <button type="button" data-approve-slice="${escapeHtml(r.componentId)}" data-component-name="${escapeHtml(r.componentName)}"
-              ${!canApprove || approved ? "disabled" : ""}
-              class="cedar-btn-signoff cedar-btn-slice${canApprove && !approved ? " is-ready" : ""}${approved ? " is-done" : ""}">
-              ${approved ? "Signed off" : canApprove ? "Sign off slice" : "Resolve blockers"}
+              ${approved ? "disabled" : ""}
+              class="cedar-btn-signoff cedar-btn-slice${!approved ? " is-ready" : ""}${approved ? " is-done" : ""}"
+              title="Mark this slice approved in Cedar (not sent to GitHub)">
+              ${approved ? "Approved" : "Mark approved"}
             </button>
           </div>
           <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
@@ -1030,7 +1030,7 @@ function renderResults(container, data) {
         <div class="cedar-pr-stats" role="group" aria-label="Review progress">
           <p class="cedar-pr-stat-label">Confidence</p>
           <div class="cedar-pr-stat-divider" aria-hidden="true"></div>
-          <p class="cedar-pr-stat-label">Slices signed off</p>
+          <p class="cedar-pr-stat-label">Slices approved</p>
           <p class="cedar-pr-stat-value tabular-nums ${confidence.color}">
             <span class="cedar-pr-stat-num">${confidence.score}</span><span class="cedar-pr-stat-denom">/5</span>
           </p>
@@ -1043,7 +1043,7 @@ function renderResults(container, data) {
           </div>
         </div>
         <button type="button" id="approve-pr-btn" ${canApprovePr ? "" : "disabled"} class="cedar-btn-signoff cedar-btn-approve-pr${canApprovePr ? " is-ready" : ""}"
-          title="${canApprovePr ? "Approve the full pull request on GitHub" : "Sign off every slice first; resolve blockers if any slice failed"}">
+          title="${canApprovePr ? "Approve the full pull request on GitHub" : "Mark every slice approved in Cedar first"}">
           Approve full PR
         </button>
       </div>
@@ -1294,45 +1294,17 @@ function bindApproveHandlers(root) {
   root.querySelector("#approve-pr-btn")?.addEventListener("click", () => void approveFullPr());
 }
 
-async function approveSlice(btn) {
+function approveSlice(btn) {
   const session = window.__cedarSession;
   if (!session) return;
-  btn.disabled = true;
-  const prev = btn.textContent;
-  btn.textContent = "Saving…";
+  const componentId = btn.dataset.approveSlice;
+  if (!componentId) return;
 
-  try {
-    const res = await fetch("/api/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prUrl: session.prUrl,
-        token: session.token,
-        owner: session.data.target?.owner,
-        repo: session.data.target?.repo,
-        pr: session.data.target?.pr,
-        scope: "slice",
-        componentId: btn.dataset.approveSlice,
-        componentName: btn.dataset.componentName,
-        headSha: session.data.pull.headSha,
-      }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(githubApiErrorMessage(body, res.statusText));
-    session.sliceApprovals.add(btn.dataset.approveSlice);
-    showToast(
-      body.hint
-        ? `Slice signed off on GitHub · ${body.hint}`
-        : `Slice signed off · ${btn.dataset.componentName}`
-    );
-    const results = document.getElementById("results");
-    renderResults(results, session.data);
-    bindApproveHandlers(results);
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = prev;
-    showToast(err instanceof Error ? err.message : String(err), "error");
-  }
+  session.sliceApprovals.add(componentId);
+  showToast(`Marked approved · ${btn.dataset.componentName ?? componentId}`);
+  const results = document.getElementById("results");
+  renderResults(results, session.data);
+  bindApproveHandlers(results);
 }
 
 async function approveFullPr() {

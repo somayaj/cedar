@@ -260,7 +260,102 @@ function renderCommentThreadSlide(items) {
       </article>`;
     })
     .join("");
-  return `<div class="cedar-diff-comment-thread" role="region" aria-label="Review comments on this line">${cards}</div>`;
+  const count = items.length;
+  const noun = count === 1 ? "comment" : "comments";
+  return `<div class="cedar-diff-comment-thread-wrap">
+    <button type="button" class="cedar-diff-comment-thread-toggle" aria-expanded="true" aria-label="Hide ${count} review ${noun} on this line">
+      <span class="cedar-diff-comment-thread-toggle-count">${count}</span>
+      <span class="cedar-diff-comment-thread-toggle-label">Hide ${noun}</span>
+    </button>
+    <div class="cedar-diff-comment-thread" role="region" aria-label="Review comments on this line">${cards}</div>
+  </div>`;
+}
+
+/**
+ * @param {HTMLElement} threadRow
+ * @param {boolean} [expand]
+ */
+function setThreadRowExpanded(threadRow, expand) {
+  const on = expand ?? !threadRow.classList.contains("is-collapsed");
+  threadRow.classList.toggle("is-collapsed", !on);
+  const btn = threadRow.querySelector(".cedar-diff-comment-thread-toggle");
+  const label = threadRow.querySelector(".cedar-diff-comment-thread-toggle-label");
+  const count = threadRow.querySelectorAll(".cedar-diff-comment-card").length;
+  const noun = count === 1 ? "comment" : "comments";
+  if (btn instanceof HTMLButtonElement) {
+    btn.setAttribute("aria-expanded", on ? "true" : "false");
+    btn.setAttribute("aria-label", `${on ? "Hide" : "Show"} ${count} review ${noun} on this line`);
+  }
+  if (label instanceof HTMLElement) {
+    label.textContent = on ? `Hide ${noun}` : `Show ${noun}`;
+  }
+}
+
+/**
+ * @param {HTMLElement} codeRow
+ */
+function toggleThreadForCodeRow(codeRow) {
+  const threadRow = codeRow.nextElementSibling;
+  if (!(threadRow instanceof HTMLElement) || !threadRow.classList.contains("cedar-diff-comment-thread-row")) return;
+  setThreadRowExpanded(threadRow);
+}
+
+/**
+ * @param {HTMLElement} body
+ */
+function wireCommentThreads(body) {
+  body.querySelectorAll(".cedar-diff-comment-thread-row").forEach((threadRow) => {
+    if (!(threadRow instanceof HTMLElement)) return;
+    if (threadRow.dataset.wiredThreadToggle) return;
+    threadRow.dataset.wiredThreadToggle = "1";
+    const btn = threadRow.querySelector(".cedar-diff-comment-thread-toggle");
+    btn?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      setThreadRowExpanded(threadRow);
+    });
+  });
+}
+
+/**
+ * @param {ParentNode} root
+ * @param {boolean} visible
+ */
+function setAllCommentThreadsVisible(root, visible) {
+  root.querySelectorAll(".cedar-diff-comment-thread-row").forEach((threadRow) => {
+    if (!(threadRow instanceof HTMLElement)) return;
+    if (visible) {
+      threadRow.hidden = false;
+      setThreadRowExpanded(threadRow, true);
+    } else {
+      threadRow.hidden = true;
+    }
+  });
+  root.querySelectorAll("[data-comments-toggle]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    btn.textContent = visible ? "Hide comments" : "Show comments";
+    btn.setAttribute("aria-pressed", visible ? "true" : "false");
+  });
+  root.querySelectorAll(".cedar-gh-files-changed").forEach((host) => {
+    if (host instanceof HTMLElement) {
+      host.dataset.commentsHidden = visible ? "false" : "true";
+    }
+  });
+}
+
+/**
+ * @param {ParentNode} root
+ */
+function wireCommentVisibilityControls(root) {
+  root.querySelectorAll("[data-comments-toggle]").forEach((btn) => {
+    if (!(btn instanceof HTMLButtonElement)) return;
+    if (btn.dataset.wiredCommentsToggle) return;
+    btn.dataset.wiredCommentsToggle = "1";
+    btn.addEventListener("click", () => {
+      const hidden = btn.getAttribute("aria-pressed") !== "true";
+      setAllCommentThreadsVisible(root, hidden);
+    });
+  });
 }
 
 /**
@@ -291,8 +386,11 @@ function paintCommentsForBody(body, comments, path) {
     td.className = "cedar-diff-comment-thread-cell";
     td.innerHTML = renderCommentThreadSlide(items);
     threadRow.appendChild(td);
+    threadRow.dataset.sourceRow = "1";
     row.insertAdjacentElement("afterend", threadRow);
   });
+
+  wireCommentThreads(body);
 }
 
 /**
@@ -394,6 +492,20 @@ function wireDiffBodyComments(body) {
 
     const openFromRow = (ev) => {
       if (ev.target instanceof HTMLElement && ev.target.closest(".cedar-diff-add-comment")) return;
+      if (
+        row.classList.contains("cedar-diff-line-commented") &&
+        row.nextElementSibling?.classList.contains("cedar-diff-comment-thread-row") &&
+        !(ev.target instanceof HTMLElement && ev.target.closest(".cedar-diff-add-comment"))
+      ) {
+        const onGutter = ev.target instanceof HTMLElement && ev.target.closest(".d2h-code-linenumber, .d2h-code-side-linenumber");
+        const onCode = ev.target instanceof HTMLElement && ev.target.closest(".d2h-code-line-ctn");
+        if (onGutter || onCode) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleThreadForCodeRow(row);
+          return;
+        }
+      }
       const onGutter = ev.target instanceof HTMLElement && ev.target.closest(".d2h-code-linenumber, .d2h-code-side-linenumber");
       const onCode = ev.target instanceof HTMLElement && ev.target.closest(".d2h-code-line-ctn");
       if (!onGutter && !onCode) return;
@@ -411,6 +523,7 @@ function wireDiffBodyComments(body) {
  */
 export function wireDiffComments(root) {
   wirePopoverOnce();
+  wireCommentVisibilityControls(root);
   root.querySelectorAll("[data-file-body]").forEach((body) => {
     if (!(body instanceof HTMLElement)) return;
     wireDiffBodyComments(body);
