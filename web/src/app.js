@@ -291,6 +291,24 @@ function renderDiagramSliceBadges(slices) {
   return `<div class="cedar-diagram-slice-badges flex flex-wrap items-center gap-1.5" role="list" aria-label="Micro slices in this PR">${dots}</div>`;
 }
 
+/**
+ * @param {{ view: string, label: string, id: string, aria: string, first?: boolean }} spec
+ * @param {string} sliceBadgesHtml
+ */
+function completeLayoutMermaidArticle(spec, sliceBadgesHtml) {
+  const mt = spec.first ? "" : " mt-8";
+  const extraClass = spec.view === "uml" ? " cedar-layout-view-uml" : "";
+  return `<article class="cedar-layout-view${extraClass}${mt} w-full" data-layout-view="${escapeHtml(spec.view)}" data-diagram-wrap>
+              <div class="architecture-read-mermaid-head mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p class="cedar-label mb-0">${escapeHtml(spec.label)}</p>
+                ${mermaidToolbar(sliceBadgesHtml)}
+              </div>
+              <div class="diagram-complete-layout diagram-stage-canvas cedar-mermaid-scroll">
+                <div id="${escapeHtml(spec.id)}" class="cedar-mermaid-source m-0" role="img" aria-label="${escapeHtml(spec.aria)}"></div>
+              </div>
+            </article>`;
+}
+
 function mermaidToolbar(sliceBadgesHtml = "") {
   return `<div class="diagram-toolbar flex flex-wrap items-center gap-1.5" data-diagram-toolbar>
     ${sliceBadgesHtml}
@@ -298,7 +316,7 @@ function mermaidToolbar(sliceBadgesHtml = "") {
     <button type="button" class="diagram-tool-btn" data-diagram-action="out" title="Zoom out">−</button>
     <button type="button" class="diagram-tool-btn" data-diagram-action="reset" title="Fit">Fit</button>
     <button type="button" class="diagram-tool-btn" data-diagram-action="collapse" title="Collapse diagram" aria-expanded="true">▾</button>
-    <button type="button" class="diagram-tool-btn" data-diagram-action="maximize" title="Maximize panel (scroll or zoom UML)" aria-pressed="false">⤢</button>
+    <button type="button" class="diagram-tool-btn" data-diagram-action="maximize" title="Maximize panel (scroll or zoom)" aria-pressed="false">⤢</button>
   </div>`;
 }
 
@@ -674,15 +692,26 @@ function wireSliceRailResize(root) {
  * @param {ParentNode} root
  * @param {{ components?: string, flow?: string, events?: string }} views
  */
+const COMPLETE_LAYOUT_MERMAID_SLOTS = [
+  { key: "components", sel: "#cedar-mermaid-components" },
+  { key: "flow", sel: "#cedar-mermaid-flow" },
+  { key: "events", sel: "#cedar-mermaid-events" },
+  { key: "c4Context", sel: "#cedar-mermaid-c4-context" },
+  { key: "c4Container", sel: "#cedar-mermaid-c4-container" },
+  { key: "c4Component", sel: "#cedar-mermaid-c4-component" },
+  { key: "c4Dynamic", sel: "#cedar-mermaid-c4-dynamic" },
+  { key: "c4Deployment", sel: "#cedar-mermaid-c4-deployment" },
+];
+
 function wireCompleteLayoutViews(root, views) {
   if (!(root instanceof HTMLElement) || !views) return;
   const host = root.querySelector("#architecture-read-mermaid");
   if (!(host instanceof HTMLElement)) return;
 
   const allMounted = () =>
-    ["#cedar-mermaid-components", "#cedar-mermaid-flow", "#cedar-mermaid-events"].every((sel) => {
+    COMPLETE_LAYOUT_MERMAID_SLOTS.every(({ key, sel }) => {
       const slot = host.querySelector(sel);
-      return slot?.querySelector("svg") || !views[sel.replace("#cedar-mermaid-", "")]?.trim();
+      return slot?.querySelector("svg") || !views[key]?.trim();
     });
 
   const draw = () => {
@@ -834,7 +863,14 @@ function renderResults(container, data) {
   }
   const hasLayoutViews = Boolean(
     layoutViews &&
-      (layoutViews.components?.trim() || layoutViews.flow?.trim() || layoutViews.events?.trim())
+      (layoutViews.components?.trim() ||
+        layoutViews.flow?.trim() ||
+        layoutViews.events?.trim() ||
+        layoutViews.c4Context?.trim() ||
+        layoutViews.c4Container?.trim() ||
+        layoutViews.c4Component?.trim() ||
+        layoutViews.c4Dynamic?.trim() ||
+        layoutViews.c4Deployment?.trim())
   );
   const showArchitectureSection = archSliceCount > 0 || hasLayoutViews;
   const architectureReadSummary = (
@@ -1107,33 +1143,24 @@ function renderResults(container, data) {
                 ? `<section class="cedar-diagram-stage mt-6 w-full min-w-0" aria-labelledby="complete-layout-heading">
             <p id="complete-layout-heading" class="cedar-label mb-4">Complete layout</p>
             <div class="cedar-complete-layout-views w-full min-w-0" id="architecture-read-mermaid">
-            <article class="cedar-layout-view cedar-layout-view-uml w-full" data-layout-view="uml" data-diagram-wrap>
-              <div class="architecture-read-mermaid-head mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p class="cedar-label mb-0">UML · components</p>
-                ${mermaidToolbar(diagramSliceBadges)}
-              </div>
-              <div class="diagram-complete-layout diagram-stage-canvas cedar-mermaid-scroll">
-                <div id="cedar-mermaid-components" class="cedar-mermaid-source m-0" role="img" aria-label="UML components class diagram"></div>
-              </div>
-            </article>
-            <article class="cedar-layout-view mt-8 w-full" data-layout-view="flow" data-diagram-wrap>
-              <div class="architecture-read-mermaid-head mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p class="cedar-label mb-0">Flow</p>
-                ${mermaidToolbar(diagramSliceBadges)}
-              </div>
-              <div class="diagram-complete-layout diagram-stage-canvas cedar-mermaid-scroll">
-                <div id="cedar-mermaid-flow" class="cedar-mermaid-source m-0" role="img" aria-label="Request flow diagram"></div>
-              </div>
-            </article>
-            <article class="cedar-layout-view mt-8 w-full" data-layout-view="events" data-diagram-wrap>
-              <div class="architecture-read-mermaid-head mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p class="cedar-label mb-0">Events</p>
-                ${mermaidToolbar(diagramSliceBadges)}
-              </div>
-              <div class="diagram-complete-layout diagram-stage-canvas cedar-mermaid-scroll">
-                <div id="cedar-mermaid-events" class="cedar-mermaid-source m-0" role="img" aria-label="Domain events sequence diagram"></div>
-              </div>
-            </article>
+            ${[
+              {
+                view: "uml",
+                label: "UML · components",
+                id: "cedar-mermaid-components",
+                aria: "UML components class diagram",
+                first: true,
+              },
+              { view: "flow", label: "Flow", id: "cedar-mermaid-flow", aria: "Request flow diagram" },
+              { view: "events", label: "Events", id: "cedar-mermaid-events", aria: "Domain events sequence diagram" },
+              { view: "c4-context", label: "C4 · context", id: "cedar-mermaid-c4-context", aria: "C4 system context" },
+              { view: "c4-container", label: "C4 · container", id: "cedar-mermaid-c4-container", aria: "C4 container diagram" },
+              { view: "c4-component", label: "C4 · component", id: "cedar-mermaid-c4-component", aria: "C4 component diagram" },
+              { view: "c4-dynamic", label: "C4 · dynamic", id: "cedar-mermaid-c4-dynamic", aria: "C4 dynamic runtime diagram" },
+              { view: "c4-deployment", label: "C4 · deployment", id: "cedar-mermaid-c4-deployment", aria: "C4 deployment diagram" },
+            ]
+              .map((spec) => completeLayoutMermaidArticle(spec, diagramSliceBadges))
+              .join("")}
             </div>
           </section>`
                 : ""

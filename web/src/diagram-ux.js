@@ -149,7 +149,7 @@ export async function mountLayoutMermaid(root, source) {
 
 /**
  * @param {ParentNode} root
- * @param {{ components?: string, flow?: string, events?: string }} views
+ * @param {{ components?: string, flow?: string, events?: string, c4Context?: string, c4Container?: string, c4Component?: string, c4Dynamic?: string, c4Deployment?: string }} views
  */
 export async function mountCompleteLayoutViews(root, views) {
   if (!root || !views) return 0;
@@ -157,6 +157,11 @@ export async function mountCompleteLayoutViews(root, views) {
     { key: "components", sel: "#cedar-mermaid-components" },
     { key: "flow", sel: "#cedar-mermaid-flow" },
     { key: "events", sel: "#cedar-mermaid-events" },
+    { key: "c4Context", sel: "#cedar-mermaid-c4-context" },
+    { key: "c4Container", sel: "#cedar-mermaid-c4-container" },
+    { key: "c4Component", sel: "#cedar-mermaid-c4-component" },
+    { key: "c4Dynamic", sel: "#cedar-mermaid-c4-dynamic" },
+    { key: "c4Deployment", sel: "#cedar-mermaid-c4-deployment" },
   ];
   let drawn = 0;
   await Promise.all(
@@ -168,9 +173,7 @@ export async function mountCompleteLayoutViews(root, views) {
       const wrap = pre.closest("[data-diagram-wrap]");
       const svg = pre.querySelector("svg");
       if (ok && wrap instanceof HTMLElement && svg instanceof SVGSVGElement) {
-        const isUml = wrap.getAttribute("data-layout-view") === "uml";
-        if (isUml) mountUmlDiagramScrollable(wrap, pre);
-        else mountDiagramStageFullWidth(wrap, pre);
+        mountLayoutMermaidScrollable(wrap, pre);
         activateDiagramUx(wrap);
         drawn += 1;
       } else if (!ok && pre instanceof HTMLElement) {
@@ -326,11 +329,11 @@ export function refitPanZoomDiagrams(root) {
 }
 
 /**
- * UML class diagram: natural size × zoom (scrollable stage; do not shrink to panel width).
+ * Complete layout Mermaid: natural size × zoom (scrollable stage; do not shrink to panel width).
  * @param {HTMLElement} wrap
  * @param {HTMLElement} pre
  */
-function mountUmlDiagramScrollable(wrap, pre) {
+function mountLayoutMermaidScrollable(wrap, pre) {
   const stage = wrap.querySelector(".diagram-complete-layout");
   const svg = pre.querySelector("svg");
   if (!(stage instanceof HTMLElement) || !(svg instanceof SVGSVGElement)) return;

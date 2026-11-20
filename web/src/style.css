@@ -320,25 +320,25 @@
     opacity: 1 !important;
   }
 
-  .cedar-layout-view-uml .diagram-stage-canvas {
+  .cedar-complete-layout-views .cedar-layout-view .diagram-stage-canvas {
     overflow: auto;
     overscroll-behavior: contain;
   }
 
-  .cedar-layout-view-uml .cedar-mermaid-source,
-  .cedar-layout-view-uml .mermaid-rendered {
+  .cedar-complete-layout-views .cedar-layout-view .cedar-mermaid-source,
+  .cedar-complete-layout-views .cedar-layout-view .mermaid-rendered {
     @apply w-max max-w-none min-w-full text-left;
   }
 
-  .cedar-layout-view-uml .mermaid-rendered svg,
-  .cedar-layout-view-uml .cedar-mermaid-source svg {
+  .cedar-complete-layout-views .cedar-layout-view .mermaid-rendered svg,
+  .cedar-complete-layout-views .cedar-layout-view .cedar-mermaid-source svg {
     width: auto !important;
     height: auto !important;
     max-width: none !important;
     min-height: 8rem;
   }
 
-  .cedar-layout-view-uml.is-diagram-maximized .diagram-stage-canvas {
+  .cedar-complete-layout-views .cedar-layout-view.is-diagram-maximized .diagram-stage-canvas {
     min-height: min(64vh, 780px);
     height: min(78vh, 1000px);
     max-height: min(92vh, 1120px);
