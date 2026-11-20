@@ -5,7 +5,7 @@ import { resolveCursorModel } from "./default-model.js";
 import { enrichFinding, normalizeFindingPriority, normalizeFindingTag } from "./finding-meta.js";
 import { parseJsonFromModel } from "./openrouter.js";
 import { splitPatchIntoHunks } from "./partition.js";
-import { clipCodeExcerpt, validateLineInPatch } from "./patch-review.js";
+import { clipCodeExcerpt, resolveCommentLineInPatch } from "./patch-review.js";
 
 /**
  * @typedef {import('./partition.js').MicroPr} MicroPr
@@ -93,10 +93,10 @@ Rules:
     .map((f) => {
       const filename = f.filename ? String(f.filename) : "";
       const patch = patchByPath.get(filename) ?? "";
-      const line = Number(f.line);
+      const line = resolveCommentLineInPatch(patch, Number(f.line));
       const suggestion = f.suggestion ? String(f.suggestion).trim() : "";
       let baseMessage = String(f.message ?? "").trim();
-      if (!baseMessage || !filename || !validateLineInPatch(patch, line)) return null;
+      if (!baseMessage || !filename || line == null) return null;
 
       if (suggestion) {
         baseMessage = `${baseMessage}\n\n**Suggested change:**\n${suggestion.startsWith("```") ? suggestion : `\`${suggestion}\``}`;

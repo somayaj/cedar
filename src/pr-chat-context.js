@@ -50,6 +50,11 @@ export function prChatContextFromReport(report) {
     compositeReady: Boolean(composite?.body),
     compositeExcerpt: composite?.body?.slice(0, 1500),
     macroReview: macroReview?.body?.slice(0, 2500) ?? null,
+    macroFindings: (macroReview?.findings ?? []).map((f) => ({
+      tag: f.tag,
+      priority: f.priority,
+      message: String(f.message ?? "").slice(0, 400),
+    })),
     macroVerdict: macroReview?.event ?? null,
   };
 }

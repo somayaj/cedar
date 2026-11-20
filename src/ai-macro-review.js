@@ -2,6 +2,7 @@ import { activeAiProvider } from "./ai-chat.js";
 import { cursorApiKey, sliceReviewAiAvailable } from "./ai-credentials.js";
 import { composerReviewChat } from "./cursor-llm.js";
 import { resolveCursorModel } from "./default-model.js";
+import { enrichFinding, normalizeFindingPriority, normalizeFindingTag } from "./finding-meta.js";
 import { parseJsonFromModel } from "./openrouter.js";
 
 /**
@@ -46,9 +47,13 @@ Return JSON only:
 {
   "verdict": "approve" | "comment" | "request_changes",
   "priority": "P0" | "P1" | "P2" | "P3",
+  "findings": [
+    { "ruleId": "macro/short-id", "tag": "security|architecture|quality|boundary|hygiene", "priority": "P0-P3", "message": "One PR-wide theme (2-3 sentences, no file paths required)" }
+  ],
   "body": "Markdown for a single PR review comment: ## Summary, ## Architecture & scope, ## Risks & test gaps, ## Recommendation (3-8 short paragraphs, constructive teammate tone)"
 }
 Rules:
+- findings: 3-8 PR-level themes (cross-slice risks, testing, rollout) — not duplicates of every micro line comment.
 - Refer to slices by name; do not repeat every micro comment verbatim — integrate themes.
 - Call out cross-boundary concerns, missing tests, rollout, and whether this is safe to merge.
 - No audit tables, no "finding" jargon, no file-count filler.`;
@@ -82,11 +87,30 @@ Rules:
   const event =
     verdictRaw === "approve" ? "APPROVE" : verdictRaw === "request_changes" ? "REQUEST_CHANGES" : "COMMENT";
 
+  const themes = Array.isArray(parsed.findings) ? parsed.findings : [];
+  const findings = themes
+    .slice(0, 10)
+    .map((f) => {
+      const message = String(f.message ?? "").trim();
+      if (!message) return null;
+      return enrichFinding({
+        ruleId: `macro/${String(f.ruleId ?? "theme").replace(/\s+/g, "-")}`,
+        severity: "info",
+        message,
+        tag: normalizeFindingTag(f.tag),
+        priority: normalizeFindingPriority(f.priority),
+        source: "composer",
+        scope: "pr",
+      });
+    })
+    .filter(Boolean);
+
   return {
     body,
     event,
     priority: String(parsed.priority ?? "P2").toUpperCase(),
     model,
-    source: "composer",
+    source: "cursor",
+    findings,
   };
 }

@@ -36,7 +36,6 @@ function renderCommentCard(f, r, fi, posted) {
   const key = findingKey(r.componentId, f, fi);
   const ignored = isFindingIgnored(key);
   const onGithub = posted.has(key) || f.source === "github";
-  const fromGithub = f.source === "github";
   const lineChip =
     typeof f.line === "number" && f.line > 0
       ? `<span class="cedar-badge cedar-badge-muted font-mono text-[9px]">L${f.line}</span>`
@@ -51,7 +50,7 @@ function renderCommentCard(f, r, fi, posted) {
   return `<li class="cedar-review-comment-card cedar-glass-subtle px-3 py-2.5${ignored ? " is-ignored" : ""}" data-finding-key="${escapeHtml(key)}">
     <p class="cedar-review-comment-body text-sm leading-relaxed text-zinc-200">${escapeHtml(f.message)}</p>
     <div class="cedar-review-comment-meta mt-2 flex flex-wrap items-center gap-1.5">
-      ${fromGithub ? '<span class="cedar-badge cedar-badge-muted text-[9px]">On PR</span>' : '<span class="cedar-badge cedar-badge-muted text-[9px]">Draft</span>'}
+      <span class="cedar-badge cedar-badge-ok text-[9px]">Cursor</span>
       ${renderCommentMeta(f)}
       ${lineChip}
       ${jumpBtn}
@@ -87,14 +86,14 @@ function renderCommentCard(f, r, fi, posted) {
  */
 export function buildFindingsListHtml(sliceResult, session) {
   const r = sliceResult;
-  const sliceFindings = findingsForSlice(r.componentId, r, session);
+  const sliceFindings = findingsForSlice(r.componentId, r);
   const posted = session?.findingCommentsPosted ?? new Set();
   const activeFindings = sliceFindings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
 
   if (sliceFindings.length === 0) {
     return {
       html: `<p class="text-xs leading-relaxed text-zinc-500">
-        No <strong class="font-medium text-zinc-400">micro</strong> review comments for this slice yet. Re-run <strong class="font-medium text-zinc-400">Start review</strong> with Composer (<span class="font-mono text-zinc-600">CURSOR_API_KEY</span>). Comments attach to changed files below — post with <strong class="font-medium text-zinc-400">Post comment</strong>.
+        No <strong class="font-medium text-zinc-400">Cursor</strong> findings on this slice yet. Set <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> and <span class="font-mono text-zinc-600">CEDAR_AI_PROVIDER=cursor</span>, then <strong class="font-medium text-zinc-400">Start review</strong>. Draft comments appear here by file; GitHub inline comments stay on the diff.
       </p>`,
       activeCount: 0,
     };
@@ -123,8 +122,7 @@ export function buildFindingsListHtml(sliceResult, session) {
     })
     .join("");
 
-  const html = `<p class="mb-2 text-[10px] leading-snug text-zinc-600"><strong class="font-medium text-zinc-400">Micro review</strong> — inline comments on files in this slice (macro review covers the whole PR above).</p>
-    <ul class="cedar-findings-list cedar-findings-by-file space-y-4">${fileSections}</ul>`;
+  const html = `<ul class="cedar-findings-list cedar-findings-by-file space-y-4">${fileSections}</ul>`;
 
   return { html, activeCount: activeFindings.length };
 }

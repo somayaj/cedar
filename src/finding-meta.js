@@ -66,6 +66,9 @@ export function getFindingMeta(ruleId, severity = "info") {
   if (exact) {
     tag = exact.tag;
     if (exact.priority) priority = exact.priority;
+  } else if (id.startsWith("macro/")) {
+    tag = "architecture";
+    priority = priority === "P3" ? "P2" : priority;
   } else if (id.startsWith("ai/") || id.startsWith("composer/")) {
     tag = id.startsWith("composer/") ? "ai" : "ai";
     priority = severity === "blocker" ? "P1" : severity === "warning" ? "P2" : "P3";

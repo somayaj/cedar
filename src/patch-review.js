@@ -58,6 +58,36 @@ export function validateLineInPatch(patch, line) {
   return false;
 }
 
+/**
+ * Map Composer line numbers onto a valid + line in the patch (models often drift by a few lines).
+ *
+ * @param {string} patch
+ * @param {number} [line]
+ * @returns {number | null}
+ */
+export function resolveCommentLineInPatch(patch, line) {
+  if (!patch?.trim()) return null;
+  const added = [];
+  for (const row of walkPatchLines(patch)) {
+    if (row.kind === "add") added.push(row.line);
+  }
+  if (!added.length) return null;
+  if (typeof line === "number" && line > 0 && validateLineInPatch(patch, line)) return line;
+  if (typeof line === "number" && line > 0) {
+    let best = added[0];
+    let dist = Math.abs(best - line);
+    for (const l of added) {
+      const d = Math.abs(l - line);
+      if (d < dist) {
+        dist = d;
+        best = l;
+      }
+    }
+    if (dist <= 25) return best;
+  }
+  return added[0] ?? null;
+}
+
 export function clipCodeExcerpt(text, max = 120) {
   const t = text.replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;

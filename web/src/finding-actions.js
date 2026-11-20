@@ -1,3 +1,5 @@
+import { isCodeReviewFinding } from "../../src/finding-meta.js";
+
 /**
  * @param {string} componentId
  * @param {{ ruleId?: string, filename?: string }} f
@@ -10,17 +12,15 @@ export function findingKey(componentId, f, index) {
   return `${componentId}::${f.ruleId ?? "finding"}::${f.filename ?? ""}::${index}`;
 }
 
-import { isCodeReviewFinding } from "../../src/finding-meta.js";
-
 /**
+ * Composer draft comments only — GitHub inline comments stay on the diff.
+ *
  * @param {string} componentId
- * @param {{ findings?: Array<unknown>, reviewComments?: Array<unknown> }} microResult
- * @param {{ githubFindingsBySlice?: Record<string, Array<unknown>> } | undefined} session
+ * @param {{ reviewComments?: Array<unknown> }} microResult
  */
-export function findingsForSlice(componentId, microResult, session) {
+export function findingsForSlice(componentId, microResult) {
   const comments = Array.isArray(microResult.reviewComments) ? microResult.reviewComments : [];
-  const extra = session?.githubFindingsBySlice?.[componentId] ?? [];
-  return [...comments, ...extra].filter(isCodeReviewFinding);
+  return comments.filter(isCodeReviewFinding);
 }
 
 /**
@@ -66,7 +66,7 @@ export function firstAddedLineInPatch(patch) {
 export function countActiveFindings(microResults, severity, session) {
   let n = 0;
   for (const r of microResults) {
-    const list = findingsForSlice(r.componentId, r, session);
+    const list = findingsForSlice(r.componentId, r);
     list.forEach((f, i) => {
       const key = findingKey(r.componentId, f, i);
       if (isFindingIgnored(key)) return;

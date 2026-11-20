@@ -32,6 +32,7 @@ import {
   wireFindingActions,
 } from "./finding-actions.js";
 import { buildFindingsListHtml } from "./review-findings-ui.js";
+import { renderMacroReviewPanelHtml } from "./macro-review-ui.js";
 
 /**
  * @param {string} [status]
@@ -322,7 +323,7 @@ function patchFindingsAndMetrics() {
     if (body) body.innerHTML = html;
     if (details instanceof HTMLDetailsElement) {
       const sum = details.querySelector("summary");
-      if (sum) sum.textContent = `Micro review · files${activeCount ? ` (${activeCount})` : ""}`;
+      if (sum) sum.textContent = `Cursor · slice findings${activeCount ? ` (${activeCount})` : ""}`;
       if (activeCount) details.open = true;
     }
     patchSliceFindingBadges(panel, r, session);
@@ -338,7 +339,7 @@ function patchFindingsAndMetrics() {
 function patchSliceFindingBadges(panel, r, session) {
   const row = panel.querySelector("[data-slice-badges]");
   if (!row) return;
-  const sliceFindings = findingsForSlice(r.componentId, r, session);
+  const sliceFindings = findingsForSlice(r.componentId, r);
   const activeFindings = sliceFindings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
   const blockers = activeFindings.filter((f) => f.severity === "blocker").length;
   const warnings = activeFindings.filter((f) => f.severity === "warning").length;
@@ -444,36 +445,6 @@ function mergeConfidence(gate, microResults) {
   if (warnings > 3) return { score: 3, label: "Review carefully", color: "text-amber-200" };
   if (warnings > 0) return { score: 4, label: "Likely safe", color: "text-emerald-300" };
   return { score: 5, label: "Safe to merge", color: "text-emerald-400" };
-}
-
-/**
- * @param {{ body?: string, event?: string, priority?: string } | null | undefined} macroReview
- */
-function renderMacroReviewPanel(macroReview) {
-  if (!macroReview?.body?.trim()) {
-    return `<section class="cedar-glass-subtle cedar-macro-review mb-6 px-5 py-4" aria-labelledby="cedar-macro-review-heading">
-      <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Macro review · entire PR</h2>
-      <p class="mt-2 text-xs leading-relaxed text-zinc-500">Whole-PR feedback from Composer (architecture, risks, merge recommendation). Generated after <strong class="font-medium text-zinc-400">micro</strong> slice comments. Re-run review with <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> if empty.</p>
-    </section>`;
-  }
-  const event = macroReview.event ?? "COMMENT";
-  const eventLabel =
-    event === "APPROVE" ? "Suggests approve" : event === "REQUEST_CHANGES" ? "Suggests changes" : "Review comment";
-  return `<section class="cedar-glass-subtle cedar-macro-review mb-6 px-5 py-4" aria-labelledby="cedar-macro-review-heading">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Macro review · entire PR</h2>
-        <p class="mt-1 text-[10px] text-zinc-500">Big-picture PR comment · micro comments stay on slices below</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="cedar-badge cedar-badge-muted text-[9px]">${escapeHtml(eventLabel)}</span>
-        ${macroReview.priority ? `<span class="cedar-finding-priority text-[10px]">${escapeHtml(macroReview.priority)}</span>` : ""}
-        <button type="button" id="post-macro-review-btn" class="cedar-btn-secondary cedar-btn-compact" data-macro-event="${escapeHtml(event)}"
-          title="Post this text as a single GitHub pull request review comment">Post PR comment</button>
-      </div>
-    </div>
-    <pre class="cedar-macro-review-body mt-4 max-h-[min(42vh,28rem)] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">${escapeHtml(macroReview.body)}</pre>
-  </section>`;
 }
 
 function cyToolbar(targetId, badge = "") {
@@ -988,7 +959,7 @@ function wireSliceTabs(root, initialSliceId = "") {
 
 function renderResults(container, data) {
   const { pull, gate, microPrs, microResults, macroReview, composite, breakouts, partition, process, target } = data;
-  const macroReviewHtml = renderMacroReviewPanel(macroReview);
+  const macroReviewHtml = renderMacroReviewPanelHtml(macroReview);
   sliceApprovals = window.__cedarSession?.sliceApprovals ?? sliceApprovals;
   ensureFindingSession(window.__cedarSession);
 
@@ -1142,7 +1113,8 @@ function renderResults(container, data) {
       const rationale = micro?.rationale ?? micro?.description;
       const session = window.__cedarSession;
       const { html: findings, activeCount } = buildFindingsListHtml(r, session);
-      const activeFindings = findingsForSlice(r.componentId, r, session).filter(
+      const cursorCount = (r.reviewComments ?? []).length;
+      const activeFindings = findingsForSlice(r.componentId, r).filter(
         (f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi))
       );
       const blockers = activeFindings.filter((f) => f.severity === "blocker").length;
@@ -1164,6 +1136,7 @@ function renderResults(container, data) {
                 ${renderSliceReviewBadge(r.status)}
                 <span class="cedar-badge cedar-badge-muted">+${micro?.additions ?? 0} / −${micro?.deletions ?? 0}</span>
                 <span class="cedar-badge cedar-badge-muted">${fileList.length} files</span>
+                ${cursorCount ? `<span class="cedar-badge cedar-badge-ok text-[9px]">${cursorCount} Cursor</span>` : ""}
                 ${blockers ? `<span data-slice-blockers class="cedar-badge border-rose-500/30 bg-rose-500/10 text-rose-200">${blockers} blockers</span>` : ""}
                 ${warnings ? `<span data-slice-warnings class="cedar-badge cedar-badge-warn">${warnings} warnings</span>` : ""}
                 ${approved ? `<span class="cedar-badge cedar-badge-ok" data-slice-approved-badge>Approved</span>` : ""}
@@ -1187,7 +1160,7 @@ function renderResults(container, data) {
           <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
             ${renderSliceFileReviews(fileList, pull.url)}
             <details class="group cedar-findings-panel"${activeCount ? " open" : ""}>
-              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Micro review · files in this slice${
+              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Cursor · slice findings${
                 activeCount ? ` (${activeCount})` : ""
               }</summary>
               <div class="mt-3">${findings}</div>

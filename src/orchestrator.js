@@ -445,7 +445,11 @@ async function runMicroReviewPass(ordered, ctx) {
         const aiFindings = await aiReviewMicroSlice(micro, {
           architectureSummary: ctx.breakoutPlan?.architectureSummary,
         });
-        result = { ...result, reviewComments: aiFindings };
+        result = {
+          ...result,
+          reviewComments: aiFindings,
+          cursorReview: { source: "cursor", count: aiFindings.length },
+        };
       } catch (err) {
         if (isAiAuthError(err)) {
           aiSliceReviewStopped = true;
