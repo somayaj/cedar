@@ -23,6 +23,7 @@ import { ensureCursorBridge, bridgeBaseUrl, isBridgeManaged } from "./cursor-bri
 import { warmCursorBridgeSession } from "./cursor-bridge-client.js";
 import { runWithReviewProgress } from "./review-progress.js";
 import { resolveDiffFontConfig } from "./diff-font-config.js";
+import { ENV_FILE_PATH, envFileExists, upsertProjectEnv } from "./env-file.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -59,7 +60,43 @@ app.get("/api/health", (_req, res) => {
     githubTokenHint:
       "Reviews/approvals need Pull requests: Read and write (fine-grained) or repo scope (classic).",
     diffFont: resolveDiffFontConfig(),
+    envFile: path.basename(ENV_FILE_PATH),
+    envFileExists: envFileExists(),
   });
+});
+
+app.post("/api/config/env", (req, res) => {
+  const githubToken = req.body?.githubToken ?? req.body?.GITHUB_TOKEN;
+  const cursorApiKey = req.body?.cursorApiKey ?? req.body?.CURSOR_API_KEY;
+  /** @type {Record<string, string>} */
+  const updates = {};
+  if (typeof githubToken === "string" && githubToken.trim()) {
+    updates.GITHUB_TOKEN = githubToken.trim();
+  }
+  if (typeof cursorApiKey === "string" && cursorApiKey.trim()) {
+    updates.CURSOR_API_KEY = cursorApiKey.trim();
+  }
+  if (!Object.keys(updates).length) {
+    res.status(400).json({
+      error: "Provide githubToken and/or cursorApiKey to save into .env",
+    });
+    return;
+  }
+  try {
+    const result = upsertProjectEnv(updates);
+    res.json({
+      ok: true,
+      applied: result.applied,
+      hasToken: Boolean(process.env.GITHUB_TOKEN),
+      hasCursor: Boolean(cursorApiKey()),
+      sliceReviewOn: sliceReviewRequested(),
+      aiProvider: activeAiProvider(),
+      message: "Saved to .env and applied to this API process (no restart required).",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
 });
 
 /**

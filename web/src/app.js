@@ -132,6 +132,34 @@ export function mountApp(root) {
           </div>
 
           <form id="review-form" class="cedar-glass mt-10 p-6 sm:p-8">
+            <div class="cedar-glass-subtle mb-6 space-y-4 rounded-xl p-4 sm:p-5">
+              <div class="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p class="cedar-label mb-0">Room configuration</p>
+                  <p class="mt-1 text-[10px] leading-snug text-zinc-600">Writes <span class="font-mono text-zinc-500">GITHUB_TOKEN</span> and <span class="font-mono text-zinc-500">CURSOR_API_KEY</span> to the project <span class="font-mono text-zinc-500">.env</span> and applies them to this API.</p>
+                </div>
+                <button type="button" id="save-env-btn" class="cedar-btn-secondary cedar-btn-compact shrink-0">Save to .env</button>
+              </div>
+              <label class="block">
+                <span class="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                  <span>GitHub PAT</span>
+                  <span id="config-github-status" class="font-mono text-[10px] text-zinc-600">Checking…</span>
+                </span>
+                <input name="githubToken" type="password" autocomplete="off" spellcheck="false"
+                  placeholder="ghp_… or github_pat_…"
+                  class="cedar-input mt-2 font-mono text-xs" />
+              </label>
+              <label class="block">
+                <span class="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                  <span>Cursor API key</span>
+                  <span id="config-cursor-status" class="font-mono text-[10px] text-zinc-600">Checking…</span>
+                </span>
+                <input name="cursorApiKey" type="password" autocomplete="off" spellcheck="false"
+                  placeholder="crsr_… from cursor.com/dashboard/integrations"
+                  class="cedar-input mt-2 font-mono text-xs" />
+              </label>
+              <p id="env-save-status" class="hidden text-xs leading-relaxed text-zinc-500" role="status"></p>
+            </div>
             <label class="cedar-label">GitHub pull request URL</label>
             <input name="prUrl" required inputmode="url" autocomplete="url"
               placeholder="https://github.com/owner/repo/pull/42"
@@ -142,9 +170,10 @@ export function mountApp(root) {
                 <span class="hidden group-open:inline">Hide options</span>
               </summary>
               <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
+                <p class="text-[10px] leading-snug text-zinc-600">One-off token for this review only (if different from <span class="font-mono">.env</span>).</p>
                 <label class="block">
-                  <span class="text-xs text-zinc-500">GitHub token (optional)</span>
-                  <input name="token" type="password" autocomplete="off" placeholder="Uses server credentials if empty"
+                  <span class="text-xs text-zinc-500">GitHub token override (optional)</span>
+                  <input name="token" type="password" autocomplete="off" placeholder="Uses GITHUB_TOKEN from .env if empty"
                     class="cedar-input mt-2 font-mono text-xs" />
                 </label>
                 <div class="flex flex-wrap gap-6 text-xs text-zinc-400">
@@ -170,6 +199,7 @@ export function mountApp(root) {
 
   void refreshHealth();
   document.getElementById("review-form").addEventListener("submit", onSubmit);
+  document.getElementById("save-env-btn")?.addEventListener("click", onSaveEnvConfig);
 
   const params = new URLSearchParams(window.location.search);
   const prFromQuery = params.get("pr") ?? params.get("url");
@@ -179,12 +209,73 @@ export function mountApp(root) {
   }
 }
 
+function updateConfigStatus(data) {
+  const gh = document.getElementById("config-github-status");
+  const cur = document.getElementById("config-cursor-status");
+  if (gh) {
+    gh.textContent = data.hasToken ? "In .env / API · set" : "Not on API";
+    gh.className = data.hasToken
+      ? "font-mono text-[10px] text-emerald-400/90"
+      : "font-mono text-[10px] text-amber-400/90";
+  }
+  if (cur) {
+    const on = data.hasCursor && data.sliceReviewAvailable;
+    cur.textContent = on ? "In .env / API · set" : "Not on API";
+    cur.className = on
+      ? "font-mono text-[10px] text-emerald-400/90"
+      : "font-mono text-[10px] text-amber-400/90";
+  }
+}
+
+async function onSaveEnvConfig() {
+  const form = document.getElementById("review-form");
+  const statusEl = document.getElementById("env-save-status");
+  if (!(form instanceof HTMLFormElement) || !statusEl) return;
+  const fd = new FormData(form);
+  const githubToken = String(fd.get("githubToken") ?? "").trim();
+  const cursorApiKey = String(fd.get("cursorApiKey") ?? "").trim();
+  if (!githubToken && !cursorApiKey) {
+    showToast("Enter a GitHub PAT and/or Cursor API key, then Save to .env", "error");
+    return;
+  }
+  const btn = document.getElementById("save-env-btn");
+  if (btn instanceof HTMLButtonElement) btn.disabled = true;
+  try {
+    const res = await fetch("/api/config/env", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ githubToken: githubToken || undefined, cursorApiKey: cursorApiKey || undefined }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error ?? res.statusText);
+    statusEl.textContent = json.message ?? `Saved: ${(json.applied ?? []).join(", ")}`;
+    statusEl.classList.remove("hidden");
+    statusEl.classList.remove("text-rose-400");
+    statusEl.classList.add("text-emerald-300/90");
+    showToast("Saved to .env", "neutral");
+    const ghInput = form.querySelector('input[name="githubToken"]');
+    const curInput = form.querySelector('input[name="cursorApiKey"]');
+    if (githubToken && ghInput instanceof HTMLInputElement) ghInput.value = "";
+    if (cursorApiKey && curInput instanceof HTMLInputElement) curInput.value = "";
+    await refreshHealth();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    statusEl.textContent = msg;
+    statusEl.classList.remove("hidden", "text-emerald-300/90");
+    statusEl.classList.add("text-rose-400");
+    showToast(msg, "error");
+  } finally {
+    if (btn instanceof HTMLButtonElement) btn.disabled = false;
+  }
+}
+
 async function refreshHealth() {
   const pill = document.getElementById("health-pill");
   try {
     const res = await fetch("/api/health");
     const data = await res.json();
     window.__cedarServerHealth = data;
+    updateConfigStatus(data);
     initDiffFontFromServer(data.diffFont);
     if (data.hasToken && data.aiProvider === "cursor") {
       pill.textContent = "Cursor ready";
