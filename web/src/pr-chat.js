@@ -1,4 +1,4 @@
-import { prChatContextFromReport } from "../../src/pr-chat.js";
+import { prChatContextFromReport } from "../../src/pr-chat-context.js";
 
 /**
  * @param {object | null} report
