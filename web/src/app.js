@@ -528,14 +528,20 @@ function patchFindingsAndMetrics() {
     const panel = container.querySelector(`[data-slice-panel="${CSS.escape(r.componentId)}"]`);
     if (!panel) continue;
 
-    const { html, activeCount } = buildFindingsListHtml(r, session);
-    const body = panel.querySelector(".cedar-findings-panel > .mt-3");
+    const { html, activeCount, inlineOnly } = buildFindingsListHtml(r, session);
     const details = panel.querySelector(".cedar-findings-panel");
-    if (body) body.innerHTML = html;
     if (details instanceof HTMLDetailsElement) {
-      const sum = details.querySelector("summary");
-      if (sum) sum.textContent = `Cursor · slice findings${activeCount ? ` (${activeCount})` : ""}`;
-      if (activeCount) details.open = true;
+      const hidePanel = inlineOnly && activeCount > 0;
+      details.hidden = hidePanel;
+      if (!hidePanel) {
+        const body = details.querySelector(".mt-3");
+        if (body) body.innerHTML = html;
+        const sum = details.querySelector("summary");
+        if (sum) {
+          sum.textContent = `Cursor · slice findings${activeCount ? ` (${activeCount})` : ""}`;
+        }
+        if (activeCount) details.open = true;
+      }
     }
     patchSliceFindingBadges(panel, r, session);
   }
@@ -1350,7 +1356,8 @@ function renderResults(container, data) {
       const micro = microPrs.find((m) => m.componentId === r.componentId);
       const rationale = micro?.rationale ?? micro?.description;
       const session = window.__cedarSession;
-      const { html: findings, activeCount } = buildFindingsListHtml(r, session);
+      const { html: findings, activeCount, inlineOnly } = buildFindingsListHtml(r, session);
+      const hideFindingsPanel = inlineOnly && activeCount > 0;
       const cursorCount = (r.reviewComments ?? []).length;
       const activeFindings = findingsForSlice(r.componentId, r).filter(
         (f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi))
@@ -1397,7 +1404,7 @@ function renderResults(container, data) {
           </div>
           <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
             ${renderSliceFileReviews(fileList, pull.url)}
-            <details class="group cedar-findings-panel"${activeCount ? " open" : ""}>
+            <details class="group cedar-findings-panel"${hideFindingsPanel ? " hidden" : activeCount ? " open" : ""}>
               <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Cursor · slice findings${
                 activeCount ? ` (${activeCount})` : ""
               }</summary>

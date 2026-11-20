@@ -1,5 +1,10 @@
 import { isCodeReviewFinding } from "../../src/finding-meta.js";
-import { findingKey, findingsForSlice, isFindingIgnored } from "./finding-actions.js";
+import {
+  findingAnchoredOnDiff,
+  findingKey,
+  findingsForSlice,
+  isFindingIgnored,
+} from "./finding-actions.js";
 
 /**
  * @typedef {import("./diff-comments.js").ReviewComment} ReviewComment
@@ -25,10 +30,10 @@ export function collectCursorDraftCommentsForDiff() {
     list.forEach((f, fi) => {
       const key = findingKey(r.componentId, f, fi);
       if (isFindingIgnored(key)) return;
-      const path = f.filename ? String(f.filename) : "";
-      const line = typeof f.line === "number" ? f.line : 0;
-      const message = f.message ? String(f.message).trim() : "";
-      if (!path || line < 1 || !message) return;
+      if (!findingAnchoredOnDiff(f)) return;
+      const path = String(f.filename);
+      const line = /** @type {number} */ (f.line);
+      const message = String(f.message).trim();
 
       out.push({
         id: syntheticId,

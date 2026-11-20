@@ -1,5 +1,6 @@
 import { FINDING_TAG_CLASS, getFindingMeta } from "../../src/finding-meta.js";
 import {
+  findingAnchoredOnDiff,
   findingKey,
   findingsForSlice,
   isFindingIgnored,
@@ -108,7 +109,7 @@ function sliceCursorEmptyMessage(r, session) {
   }
 
   if (cr?.status === "pending") {
-    return `Cursor is reviewing this slice in the <strong class="font-medium text-zinc-400">background</strong> — watch the progress bar above. Findings will appear here and on the diff when ready.`;
+    return `Cursor is reviewing this slice in the <strong class="font-medium text-zinc-400">background</strong> — watch the progress bar above. Findings will appear as inline <span class="text-zinc-400">Cursor · Draft</span> threads on the diff when ready.`;
   }
 
   if (cr?.status === "skipped") {
@@ -126,7 +127,7 @@ function sliceCursorEmptyMessage(r, session) {
   }
 
   if (rawComments > 0) {
-    return `Composer returned ${rawComments} comment(s) but none could be anchored to this diff (filename/line mismatch). Re-run <strong class="font-medium text-zinc-400">Start review</strong> or check server logs.`;
+    return `Composer returned ${rawComments} comment(s) but none could be anchored to this diff (filename/line mismatch). They are listed below — or re-run <strong class="font-medium text-zinc-400">Start review</strong> and check server logs.`;
   }
 
   if (hasCursorKey && summary && summary.requested === false) {
@@ -157,16 +158,42 @@ export function buildFindingsListHtml(sliceResult, session) {
     return {
       html: `<p class="text-xs leading-relaxed text-zinc-500">${sliceCursorEmptyMessage(r, session)}</p>`,
       activeCount: 0,
+      inlineOnly: false,
+    };
+  }
+
+  const anchoredActive = activeFindings.filter(findingAnchoredOnDiff);
+  const inlineOnly = activeFindings.length > 0 && anchoredActive.length === activeFindings.length;
+
+  if (inlineOnly) {
+    return { html: "", activeCount: activeFindings.length, inlineOnly: true };
+  }
+
+  const listFindings = sliceFindings
+    .map((f, fi) => ({ f, fi }))
+    .filter(({ f, fi }) => !isFindingIgnored(findingKey(r.componentId, f, fi)))
+    .filter(({ f }) => !findingAnchoredOnDiff(f));
+
+  const onDiffNote =
+    anchoredActive.length > 0
+      ? `<p class="text-xs leading-relaxed text-zinc-500">${anchoredActive.length} Cursor finding(s) are inline on the diff above (<span class="text-zinc-400">Cursor · Draft</span>).</p>`
+      : "";
+
+  if (listFindings.length === 0) {
+    return {
+      html: onDiffNote,
+      activeCount: activeFindings.length,
+      inlineOnly: false,
     };
   }
 
   /** @type {Map<string, Array<{ f: unknown, fi: number }>>} */
   const byFile = new Map();
-  sliceFindings.forEach((f, fi) => {
+  for (const { f, fi } of listFindings) {
     const path = f.filename ?? "_slice";
     if (!byFile.has(path)) byFile.set(path, []);
     byFile.get(path).push({ f, fi });
-  });
+  }
 
   const fileSections = [...byFile.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -183,7 +210,7 @@ export function buildFindingsListHtml(sliceResult, session) {
     })
     .join("");
 
-  const html = `<ul class="cedar-findings-list cedar-findings-by-file space-y-4">${fileSections}</ul>`;
+  const html = `${onDiffNote}<ul class="cedar-findings-list cedar-findings-by-file space-y-4">${fileSections}</ul>`;
 
-  return { html, activeCount: activeFindings.length };
+  return { html, activeCount: activeFindings.length, inlineOnly: false };
 }

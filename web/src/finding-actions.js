@@ -24,6 +24,17 @@ export function findingsForSlice(componentId, microResult) {
 }
 
 /**
+ * Finding can render as an inline Cursor draft thread on the diff.
+ * @param {{ filename?: string, line?: number, message?: string }} f
+ */
+export function findingAnchoredOnDiff(f) {
+  const path = f.filename ? String(f.filename) : "";
+  const line = typeof f.line === "number" ? f.line : 0;
+  const message = f.message ? String(f.message).trim() : "";
+  return Boolean(path && line >= 1 && message);
+}
+
+/**
  * @param {{ ignoredFindings?: Set<string>, findingCommentsPosted?: Set<string> } | undefined} session
  */
 export function ensureFindingSession(session) {
