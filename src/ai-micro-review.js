@@ -1,4 +1,5 @@
-import { aiChat, parseJsonFromModel } from "./ai-chat.js";
+import { aiChat, activeAiProvider, parseJsonFromModel } from "./ai-chat.js";
+import { cursorApiKey } from "./ai-credentials.js";
 import { enrichFinding, normalizeFindingPriority, normalizeFindingTag } from "./finding-meta.js";
 import { splitPatchIntoHunks } from "./partition.js";
 
@@ -17,6 +18,12 @@ const PER_FILE_PATCH = 4500;
  */
 export async function aiReviewMicroSlice(micro, ctx = {}) {
   if (!micro.files.length) return [];
+  if (!cursorApiKey()) return [];
+  if (activeAiProvider() !== "cursor") {
+    throw new Error(
+      "AI slice review uses Cursor only. Set CURSOR_API_KEY, CEDAR_AI_PROVIDER=cursor, and unset OPENROUTER_API_KEY."
+    );
+  }
 
   const slices = micro.files.map((f) => ({
     path: f.filename,

@@ -38,6 +38,7 @@ app.get("/api/health", (_req, res) => {
     hasCursor: Boolean(cursorApiKey()),
     hasOpenRouter: Boolean(openRouterApiKey()),
     aiProvider: activeAiProvider(),
+    sliceReviewProvider: cursorApiKey() ? "cursor" : null,
     prChat: hasAiProvider(),
     cursorBridge:
       process.env.CEDAR_CURSOR_BRIDGE === "false"

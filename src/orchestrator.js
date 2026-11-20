@@ -23,6 +23,7 @@ import {
   buildCompleteLayoutMarkdown,
 } from "./architecture-layout-views.js";
 import { normalizeSliceId } from "./architecture-model.js";
+import { sliceReviewAiAvailable, resolveAiProviderName } from "./ai-credentials.js";
 import { renderReviewDiagrams } from "./diagram-graphviz.js";
 import { orderMicroPrsForLayout } from "./diagram-layout.js";
 import { buildDiagramGraph } from "./diagram-graph.js";
@@ -72,10 +73,10 @@ export async function runPrReviewPipeline(opts) {
 
   const useAiBreakouts = resolvePartitionMode(opts.partitionMode) === "ai";
   const aiReviewEnv = String(process.env.CEDAR_AI_SLICE_REVIEW ?? "").trim().toLowerCase();
-  const hasAiKey = Boolean(process.env.CURSOR_API_KEY || process.env.OPENROUTER_API_KEY);
   const useAiReview =
     opts.useAiReview ??
-    (aiReviewEnv === "true" || (hasAiKey && aiReviewEnv !== "false" && aiReviewEnv !== "0"));
+    (aiReviewEnv === "true" ||
+      (sliceReviewAiAvailable() && aiReviewEnv !== "false" && aiReviewEnv !== "0"));
 
   /** @type {import('./ai-breakouts.js').AiBreakoutPlan | null} */
   let breakoutPlan = null;
@@ -398,32 +399,37 @@ export async function runPrReviewPipeline(opts) {
  *   pr: number,
  * }} ctx
  */
+/**
+ * @param {unknown} err
+ */
+function isAiAuthError(err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /401|403|User not found|invalid.*api.*key|unauthorized|authentication/i.test(msg);
+}
+
 async function runMicroReviewPass(ordered, ctx) {
   /** @type {import('./review-engine.js').MicroReviewResult[]} */
   const microResults = [];
+  let aiSliceReviewStopped = false;
 
   for (const micro of ordered) {
     let result = reviewMicroPr(micro, { multiBoundaryFiles: ctx.multiBoundaryFiles });
 
-    if (
-      ctx.useAiReview &&
-      (process.env.CURSOR_API_KEY || process.env.OPENROUTER_API_KEY) &&
-      micro.files.length
-    ) {
+    if (ctx.useAiReview && sliceReviewAiAvailable() && !aiSliceReviewStopped && micro.files.length) {
       try {
         const aiFindings = await aiReviewMicroSlice(micro, {
           architectureSummary: ctx.breakoutPlan?.architectureSummary,
         });
-        result = mergeMicroReviewFindings(result, micro, aiFindings);
+        if (aiFindings.length) {
+          result = mergeMicroReviewFindings(result, micro, aiFindings);
+        }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        result = mergeMicroReviewFindings(result, micro, [
-          {
-            ruleId: "ai/unavailable",
-            severity: "warning",
-            message: `AI slice review failed: ${message}`,
-          },
-        ]);
+        if (isAiAuthError(err)) {
+          aiSliceReviewStopped = true;
+          console.warn("[cedar] AI slice review disabled after auth error:", err);
+        } else {
+          console.warn("[cedar] AI slice review skipped for slice", micro.componentId, err);
+        }
       }
     }
 
@@ -455,7 +461,7 @@ function resolvePartitionMode(explicit) {
   const mode = explicit ?? process.env.CEDAR_PARTITION_MODE ?? "auto";
   if (mode === "yaml") return "yaml";
   if (mode === "ai") return "ai";
-  return process.env.CURSOR_API_KEY || process.env.OPENROUTER_API_KEY ? "ai" : "yaml";
+  return resolveAiProviderName() ? "ai" : "yaml";
 }
 
 /**

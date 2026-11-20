@@ -27,7 +27,13 @@ export function resolveAiProviderName() {
   if (forced === "cursor") {
     return hasCursor ? "cursor" : null;
   }
+  // Default: Cursor when CURSOR_API_KEY is set — OpenRouter only as fallback with no Cursor key.
   if (hasCursor) return "cursor";
   if (hasOpenRouter) return "openrouter";
   return null;
+}
+
+/** AI slice review uses Composer/Cursor only (not OpenRouter). */
+export function sliceReviewAiAvailable() {
+  return Boolean(cursorApiKey());
 }
