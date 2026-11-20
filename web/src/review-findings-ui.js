@@ -1,8 +1,10 @@
 import { FINDING_TAG_CLASS, getFindingMeta } from "../../src/finding-meta.js";
 import {
   findingAnchoredOnDiff,
+  findingInlineOnDiff,
   findingKey,
   findingsForSlice,
+  isArchitectureFinding,
   isFindingIgnored,
 } from "./finding-actions.js";
 
@@ -33,7 +35,14 @@ function renderCommentMeta(f) {
  * @param {number} fi
  * @param {Set<string>} posted
  */
-function renderCommentCard(f, r, fi, posted) {
+/**
+ * @param {*} f
+ * @param {*} r
+ * @param {number} fi
+ * @param {Set<string>} posted
+ * @param {{ arch?: boolean }} [opts]
+ */
+function renderCommentCard(f, r, fi, posted, opts) {
   const key = findingKey(r.componentId, f, fi);
   const ignored = isFindingIgnored(key);
   const onGithub = posted.has(key) || f.source === "github";
@@ -51,7 +60,7 @@ function renderCommentCard(f, r, fi, posted) {
   return `<li class="cedar-review-comment-card cedar-glass-subtle px-3 py-2.5${ignored ? " is-ignored" : ""}" data-finding-key="${escapeHtml(key)}">
     <p class="cedar-review-comment-body text-sm leading-relaxed text-zinc-200">${escapeHtml(f.message)}</p>
     <div class="cedar-review-comment-meta mt-2 flex flex-wrap items-center gap-1.5">
-      <span class="cedar-badge cedar-badge-ok text-[9px]">Cursor</span>
+      <span class="cedar-badge cedar-badge-ok text-[9px]">${opts?.arch ? "Architecture" : "Cursor"}</span>
       ${renderCommentMeta(f)}
       ${lineChip}
       ${jumpBtn}
@@ -148,35 +157,67 @@ function sliceCursorEmptyMessage(r, session) {
  * @param {{ componentId: string, componentName: string, findings?: Array<unknown> }} sliceResult
  * @param {{ githubFindingsBySlice?: Record<string, unknown[]>, findingCommentsPosted?: Set<string> } | undefined} session
  */
+/**
+ * Architecture-tagged findings for the top of each slice (not on the diff).
+ *
+ * @param {{ componentId: string, componentName: string }} sliceResult
+ * @param {{ findingCommentsPosted?: Set<string> } | undefined} session
+ */
+export function buildArchitectureFindingsHtml(sliceResult, session) {
+  const r = sliceResult;
+  const posted = session?.findingCommentsPosted ?? new Set();
+  const items = findingsForSlice(r.componentId, r)
+    .map((f, fi) => ({ f, fi }))
+    .filter(({ f, fi }) => !isFindingIgnored(findingKey(r.componentId, f, fi)))
+    .filter(({ f }) => isArchitectureFinding(f));
+
+  if (!items.length) return "";
+
+  const cards = items.map(({ f, fi }) => renderCommentCard(f, r, fi, posted, { arch: true })).join("");
+  return `<section class="cedar-arch-findings cedar-glass-subtle px-4 py-3" data-arch-findings="${escapeHtml(r.componentId)}" aria-labelledby="cedar-arch-findings-${escapeHtml(r.componentId)}">
+    <p class="cedar-label" id="cedar-arch-findings-${escapeHtml(r.componentId)}">Architecture</p>
+    <p class="cedar-arch-findings-hint mt-2 text-xs leading-relaxed text-zinc-500">Structure and boundaries for this slice — not shown inline on code lines.</p>
+    <ul class="mt-3 space-y-2">${cards}</ul>
+  </section>`;
+}
+
 export function buildFindingsListHtml(sliceResult, session) {
   const r = sliceResult;
   const sliceFindings = findingsForSlice(r.componentId, r);
   const posted = session?.findingCommentsPosted ?? new Set();
   const activeFindings = sliceFindings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
+  const codeFindings = activeFindings.filter((f) => !isArchitectureFinding(f));
 
   if (sliceFindings.length === 0) {
     return {
       html: `<p class="text-xs leading-relaxed text-zinc-500">${sliceCursorEmptyMessage(r, session)}</p>`,
       activeCount: 0,
       inlineOnly: false,
+      archHtml: "",
     };
   }
 
-  const anchoredActive = activeFindings.filter(findingAnchoredOnDiff);
-  const inlineOnly = activeFindings.length > 0 && anchoredActive.length === activeFindings.length;
+  const archHtml = buildArchitectureFindingsHtml(r, session);
+  const codeInline = codeFindings.filter(findingInlineOnDiff);
+  const inlineOnly = codeFindings.length > 0 && codeInline.length === codeFindings.length;
 
-  if (inlineOnly) {
-    return { html: "", activeCount: activeFindings.length, inlineOnly: true };
+  if (inlineOnly && !archHtml) {
+    return { html: "", activeCount: activeFindings.length, inlineOnly: true, archHtml: "" };
+  }
+
+  if (inlineOnly && archHtml) {
+    return { html: "", activeCount: activeFindings.length, inlineOnly: true, archHtml };
   }
 
   const listFindings = sliceFindings
     .map((f, fi) => ({ f, fi }))
     .filter(({ f, fi }) => !isFindingIgnored(findingKey(r.componentId, f, fi)))
-    .filter(({ f }) => !findingAnchoredOnDiff(f));
+    .filter(({ f }) => !isArchitectureFinding(f))
+    .filter(({ f }) => !findingInlineOnDiff(f));
 
   const onDiffNote =
-    anchoredActive.length > 0
-      ? `<p class="text-xs leading-relaxed text-zinc-500">${anchoredActive.length} Cursor finding(s) are inline on the diff above (<span class="text-zinc-400">Cursor · Draft</span>).</p>`
+    codeInline.length > 0
+      ? `<p class="text-xs leading-relaxed text-zinc-500">${codeInline.length} code finding(s) on the diff (<span class="text-zinc-400">Cursor · Draft</span>).</p>`
       : "";
 
   if (listFindings.length === 0) {
@@ -184,6 +225,7 @@ export function buildFindingsListHtml(sliceResult, session) {
       html: onDiffNote,
       activeCount: activeFindings.length,
       inlineOnly: false,
+      archHtml,
     };
   }
 
@@ -212,5 +254,5 @@ export function buildFindingsListHtml(sliceResult, session) {
 
   const html = `${onDiffNote}<ul class="cedar-findings-list cedar-findings-by-file space-y-4">${fileSections}</ul>`;
 
-  return { html, activeCount: activeFindings.length, inlineOnly: false };
+  return { html, activeCount: activeFindings.length, inlineOnly: false, archHtml };
 }

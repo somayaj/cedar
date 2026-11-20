@@ -1477,8 +1477,22 @@
     @apply border-slate-400/35 bg-slate-500/20 text-slate-100;
   }
 
+  .cedar-arch-findings,
+  .cedar-macro-review .cedar-review-comment-card {
+    @apply rounded-xl;
+  }
+
+  .cedar-arch-findings-host:empty {
+    display: none;
+  }
+
+  .cedar-arch-findings-hint,
+  .cedar-macro-review > .flex > div > p {
+    @apply text-xs leading-relaxed text-zinc-500;
+  }
+
   .cedar-review-comment-body {
-    @apply whitespace-pre-wrap;
+    @apply text-sm leading-relaxed text-zinc-200 whitespace-pre-wrap;
   }
 
   .cedar-review-comment-card.is-ignored .cedar-review-comment-body {

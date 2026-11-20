@@ -544,17 +544,19 @@ function patchFindingsAndMetrics() {
     const panel = container.querySelector(`[data-slice-panel="${CSS.escape(r.componentId)}"]`);
     if (!panel) continue;
 
-    const { html, activeCount, inlineOnly } = buildFindingsListHtml(r, session);
+    const { html, activeCount, inlineOnly, archHtml } = buildFindingsListHtml(r, session);
+    const archHost = panel.querySelector("[data-arch-findings-host]");
+    if (archHost instanceof HTMLElement) archHost.innerHTML = archHtml;
     const details = panel.querySelector(".cedar-findings-panel");
     if (details instanceof HTMLDetailsElement) {
-      const hidePanel = inlineOnly && activeCount > 0;
+      const hidePanel = inlineOnly;
       details.hidden = hidePanel;
       if (!hidePanel) {
         const body = details.querySelector(".mt-3");
         if (body) body.innerHTML = html;
         const sum = details.querySelector("summary");
         if (sum) {
-          sum.textContent = `Cursor · slice findings${activeCount ? ` (${activeCount})` : ""}`;
+          sum.textContent = `Code findings${activeCount ? ` (${activeCount})` : ""}`;
         }
         if (activeCount) details.open = true;
       }
@@ -1372,8 +1374,8 @@ function renderResults(container, data) {
       const micro = microPrs.find((m) => m.componentId === r.componentId);
       const rationale = micro?.rationale ?? micro?.description;
       const session = window.__cedarSession;
-      const { html: findings, activeCount, inlineOnly } = buildFindingsListHtml(r, session);
-      const hideFindingsPanel = inlineOnly && activeCount > 0;
+      const { html: findings, activeCount, inlineOnly, archHtml } = buildFindingsListHtml(r, session);
+      const hideFindingsPanel = inlineOnly;
       const cursorCount = (r.reviewComments ?? []).length;
       const activeFindings = findingsForSlice(r.componentId, r).filter(
         (f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi))
@@ -1419,9 +1421,10 @@ function renderResults(container, data) {
             </button>
           </div>
           <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
+            <div class="cedar-arch-findings-host" data-arch-findings-host>${archHtml}</div>
             ${renderSliceFileReviews(fileList, pull.url)}
             <details class="group cedar-findings-panel"${hideFindingsPanel ? " hidden" : activeCount ? " open" : ""}>
-              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Cursor · slice findings${
+              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Code findings${
                 activeCount ? ` (${activeCount})` : ""
               }</summary>
               <div class="mt-3">${findings}</div>

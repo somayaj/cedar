@@ -1,4 +1,4 @@
-import { isCodeReviewFinding } from "../../src/finding-meta.js";
+import { getFindingMeta, isCodeReviewFinding } from "../../src/finding-meta.js";
 
 /**
  * @param {string} componentId
@@ -27,6 +27,25 @@ export function findingsForSlice(componentId, microResult) {
  * Finding can render as an inline Cursor draft thread on the diff.
  * @param {{ filename?: string, line?: number, message?: string }} f
  */
+/**
+ * Architecture / macro themes stay in the top panel — not inline on the diff.
+ * @param {{ tag?: string, ruleId?: string, severity?: string }} f
+ */
+export function isArchitectureFinding(f) {
+  if (String(f.ruleId ?? "").startsWith("macro/")) return true;
+  const meta = getFindingMeta(f.ruleId, f.severity);
+  const tag = f.tag ?? meta.tag;
+  return tag === "architecture";
+}
+
+/**
+ * Inline-eligible slice finding (anchored, not architecture).
+ * @param {{ filename?: string, line?: number, message?: string, tag?: string, ruleId?: string, severity?: string }} f
+ */
+export function findingInlineOnDiff(f) {
+  return findingAnchoredOnDiff(f) && !isArchitectureFinding(f);
+}
+
 export function findingAnchoredOnDiff(f) {
   const path = f.filename ? String(f.filename) : "";
   const line = typeof f.line === "number" ? f.line : 0;

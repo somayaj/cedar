@@ -46,24 +46,17 @@ export function renderMacroReviewPanelHtml(macroReview) {
     .join("");
 
   const findingsBlock = findingCards
-    ? `<details class="mt-4 group" open>
-        <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Macro review findings (${macroReview.findings.length})</summary>
-        <ul class="mt-3 space-y-2">${findingCards}</ul>
-      </details>`
-    : "";
-
-  const bodyBlock = macroReview.body?.trim()
-    ? `<details class="mt-3 group" open>
-        <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Full PR review comment (post to GitHub)</summary>
-        <pre class="cedar-macro-review-body mt-3 max-h-[min(38vh,26rem)] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">${escapeHtml(macroReview.body)}</pre>
-      </details>`
+    ? `<div class="mt-4">
+        <p class="cedar-label">Themes (${macroReview.findings.length})</p>
+        <ul class="mt-2 space-y-2">${findingCards}</ul>
+      </div>`
     : "";
 
   return `<section class="cedar-glass-subtle cedar-macro-review mb-6 px-5 py-4" aria-labelledby="cedar-macro-review-heading">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Macro review (entire PR)</h2>
-        <p class="mt-1 text-[10px] text-zinc-500">PR-wide themes · same threads appear inline on the diff (<span class="text-zinc-400">Macro review</span> on the first changed line). Slice line comments stay <span class="text-zinc-400">Cursor · Draft</span>.</p>
+        <p class="cedar-label" id="cedar-macro-review-heading">Macro review · entire PR</p>
+        <p class="mt-2 text-xs leading-relaxed text-zinc-400">PR-wide architecture and cross-cutting themes stay here. Line-level code comments appear inline on the diff as <span class="text-zinc-300">Cursor · Draft</span>.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <span class="cedar-badge cedar-badge-muted text-[9px]">${escapeHtml(eventLabel)}</span>
@@ -77,6 +70,5 @@ export function renderMacroReviewPanelHtml(macroReview) {
       </div>
     </div>
     ${findingsBlock}
-    ${bodyBlock}
   </section>`;
 }
