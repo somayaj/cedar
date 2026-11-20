@@ -11,9 +11,35 @@ const umlFitByWrap = new WeakMap();
 const umlZoomByWrap = new WeakMap();
 
 /** Match Overview · virtual micro-PRs (cytoscape toolbar + wheel). */
-const DIAGRAM_ZOOM_STEP = 1.1;
-const DIAGRAM_ZOOM_MIN = 0.2;
-const DIAGRAM_ZOOM_MAX = 2.25;
+export const DIAGRAM_ZOOM_STEP = 1.1;
+export const DIAGRAM_ZOOM_MIN = 0.2;
+export const DIAGRAM_ZOOM_MAX = 2.25;
+export const DIAGRAM_FIT_PADDING = 56;
+
+/** @type {Map<string, HTMLElement>} */
+const mermaidWrapByHostId = new Map();
+
+/**
+ * @param {string} hostId
+ * @param {HTMLElement} wrap
+ */
+export function registerMermaidDiagramHost(hostId, wrap) {
+  if (!hostId || !(wrap instanceof HTMLElement)) return;
+  mermaidWrapByHostId.set(hostId, wrap);
+}
+
+/**
+ * @param {string} hostId
+ * @param {"in" | "out" | "fit"} action
+ */
+export function applyMermaidZoomByHostId(hostId, action) {
+  const wrap = mermaidWrapByHostId.get(hostId);
+  if (!wrap || !umlFitByWrap.has(wrap)) return false;
+  if (action === "in") nudgeDiagramZoom(wrap, "in");
+  else if (action === "out") nudgeDiagramZoom(wrap, "out");
+  else if (action === "fit") fitDiagramZoomToStage(wrap);
+  return true;
+}
 
 /**
  * @param {number} z
@@ -51,9 +77,9 @@ function fitDiagramZoomToStage(wrap) {
   if (naturalW < 8 || naturalH < 8) {
     umlZoomByWrap.set(wrap, 1);
   } else {
-    const pad = 32;
-    const zoomW = (Math.max(stage.clientWidth - pad, 200)) / naturalW;
-    const zoomH = (Math.max(stage.clientHeight - pad, 120)) / naturalH;
+    const pad = DIAGRAM_FIT_PADDING;
+    const zoomW = (Math.max(stage.clientWidth - pad * 2, 200)) / naturalW;
+    const zoomH = (Math.max(stage.clientHeight - pad * 2, 120)) / naturalH;
     umlZoomByWrap.set(wrap, clampDiagramZoom(Math.min(zoomW, zoomH, DIAGRAM_ZOOM_MAX)));
   }
   umlFitByWrap.get(wrap)?.();
@@ -470,9 +496,8 @@ function fitDiagramInStage(wrap, svg, pz, opts = {}) {
 export function refitPanZoomDiagrams(root) {
   root.querySelectorAll("[data-diagram-wrap]").forEach((wrap) => {
     if (!(wrap instanceof HTMLElement)) return;
-    const umlFit = umlFitByWrap.get(wrap);
-    if (umlFit) {
-      umlFit();
+    if (umlFitByWrap.has(wrap)) {
+      fitDiagramZoomToStage(wrap);
       return;
     }
     const pz = panZoomByWrap.get(wrap);
@@ -533,12 +558,14 @@ function mountLayoutMermaidScrollable(wrap, pre) {
   };
 
   umlFitByWrap.set(wrap, fit);
+  if (pre.id) registerMermaidDiagramHost(pre.id, wrap);
+
   requestAnimationFrame(() => {
-    requestAnimationFrame(fit);
+    requestAnimationFrame(() => fitDiagramZoomToStage(wrap));
   });
 
   if (!resizeObserverByWrap.has(wrap)) {
-    const ro = new ResizeObserver(() => fit());
+    const ro = new ResizeObserver(() => fitDiagramZoomToStage(wrap));
     ro.observe(stage);
     resizeObserverByWrap.set(wrap, ro);
   }
@@ -645,8 +672,6 @@ function wireDiagramToolbars(root) {
     bar.querySelectorAll("[data-diagram-action]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const layoutHost = wrap.closest("#architecture-read-mermaid, .cedar-complete-layout-views");
-        const umlFit = umlFitByWrap.get(wrap);
-        const pz = panZoomByWrap.get(wrap);
         const action = btn.getAttribute("data-diagram-action");
 
         if (action === "collapse") {
@@ -680,34 +705,6 @@ function wireDiagramToolbars(root) {
           return;
         }
 
-        if (umlFit) {
-          if (action === "in") nudgeDiagramZoom(wrap, "in");
-          else if (action === "out") nudgeDiagramZoom(wrap, "out");
-          else if (action === "reset") fitDiagramZoomToStage(wrap);
-          return;
-        }
-        if (!pz) {
-          if (action === "reset" && umlFitByWrap.get(wrap)) umlFitByWrap.get(wrap)?.();
-          return;
-        }
-        if (action === "in") pz.zoomIn();
-        else if (action === "out") pz.zoomOut();
-        else if (action === "reset") {
-          const fit = umlFitByWrap.get(wrap);
-          if (fit) {
-            fit();
-            return;
-          }
-          pz.resetZoom();
-          const sv = wrap.querySelector("svg");
-          if (sv instanceof SVGSVGElement) {
-            fitDiagramInStage(wrap, sv, pz, { fill: true, fillWidth: true });
-          } else {
-            pz.resize();
-            pz.fit();
-            pz.center();
-          }
-        }
       });
     });
   });

@@ -1,6 +1,6 @@
 import { cedarMarkSvg } from "./cedar-logo.js";
 import { architectureIconSvg, slicesIconSvg } from "./cedar-icons.js";
-import { mountArchitectureGraphs } from "./architecture-canvas.js";
+import { mountArchitectureGraphs, wireArchitectureZoomControls } from "./architecture-canvas.js";
 import { buildDiagramGraph } from "../../src/diagram-graph.js";
 import { buildArchitectureDiagramMermaid } from "../../src/architecture-diagram.js";
 import { buildCompleteLayoutViews } from "../../src/architecture-layout-views.js";
@@ -306,7 +306,7 @@ function completeLayoutMermaidArticle(spec, sliceBadgesHtml) {
   return `<article class="cedar-layout-view cedar-architecture-read-panel${mt} w-full" data-layout-view="${escapeHtml(spec.view)}" data-diagram-wrap>
               <div class="architecture-read-mermaid-head mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p class="cedar-label mb-0">${escapeHtml(spec.label)}</p>
-                ${mermaidToolbar(sliceBadgesHtml)}
+                ${architectureDiagramToolbar(spec.id, sliceBadgesHtml)}
               </div>
               <div class="cedar-cy-host diagram-overview-read diagram-complete-layout diagram-stage-canvas cedar-mermaid-scroll">
                 <div id="${escapeHtml(spec.id)}" class="cedar-mermaid-source m-0" role="img" aria-label="${escapeHtml(spec.aria)}"></div>
@@ -314,14 +314,16 @@ function completeLayoutMermaidArticle(spec, sliceBadgesHtml) {
             </article>`;
 }
 
-function mermaidToolbar(sliceBadgesHtml = "") {
+function architectureDiagramToolbar(targetId, sliceBadgesHtml = "") {
+  const id = escapeHtml(targetId);
   return `<div class="diagram-toolbar flex flex-wrap items-center gap-1.5" data-diagram-toolbar>
     ${sliceBadgesHtml}
-    <button type="button" class="diagram-tool-btn" data-diagram-action="in" title="Zoom in">+</button>
-    <button type="button" class="diagram-tool-btn" data-diagram-action="out" title="Zoom out">−</button>
-    <button type="button" class="diagram-tool-btn" data-diagram-action="reset" title="Fit">Fit</button>
+    <span class="cedar-label mb-0">View</span>
+    <button type="button" class="diagram-tool-btn" data-cy-action="in" data-cy-target="${id}" title="Zoom in">+</button>
+    <button type="button" class="diagram-tool-btn" data-cy-action="out" data-cy-target="${id}" title="Zoom out">−</button>
+    <button type="button" class="diagram-tool-btn" data-cy-action="fit" data-cy-target="${id}" title="Fit">Fit</button>
     <button type="button" class="diagram-tool-btn" data-diagram-action="collapse" title="Collapse diagram" aria-expanded="true">▾</button>
-    <button type="button" class="diagram-tool-btn" data-diagram-action="maximize" title="Maximize panel (scroll or zoom)" aria-pressed="false">⤢</button>
+    <button type="button" class="diagram-tool-btn" data-diagram-action="maximize" title="Maximize panel" aria-pressed="false">⤢</button>
   </div>`;
 }
 
@@ -723,9 +725,12 @@ function wireCompleteLayoutViews(root, views) {
       if (allMounted()) host.dataset.mermaidLayoutsMounted = "1";
       else delete host.dataset.mermaidLayoutsMounted;
       activateDiagramUx(host);
+      wireArchitectureZoomControls(root);
       requestAnimationFrame(() => refitPanZoomDiagrams(host));
     });
   };
+
+  wireArchitectureZoomControls(root);
 
   root.querySelectorAll("[data-review-tab]").forEach((btn) => {
     if (!(btn instanceof HTMLElement) || btn.dataset.wiredMermaidTab) return;

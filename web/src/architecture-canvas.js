@@ -1,5 +1,6 @@
 import cytoscape from "cytoscape";
 import dagre from "cytoscape-dagre";
+import { applyMermaidZoomByHostId, DIAGRAM_FIT_PADDING, DIAGRAM_ZOOM_STEP } from "./diagram-ux.js";
 
 cytoscape.use(dagre);
 
@@ -157,7 +158,7 @@ function wireCyResize(cy, container) {
   const resize = () => {
     if (!container.isConnected) return;
     cy.resize();
-    cy.fit(cy.elements(), 56);
+    cy.fit(cy.elements(), DIAGRAM_FIT_PADDING);
   };
   requestAnimationFrame(() => requestAnimationFrame(resize));
   if (typeof ResizeObserver !== "undefined") {
@@ -212,7 +213,7 @@ function mountCy(container, graph) {
 
     cy.one("layoutstop", () => {
       cy.resize();
-      cy.fit(cy.elements(), 56);
+      cy.fit(cy.elements(), DIAGRAM_FIT_PADDING);
       cy.center(cy.elements());
     });
 
@@ -230,27 +231,38 @@ function mountCy(container, graph) {
  * @param {HTMLElement} root
  * @param {object} diagramGraph
  */
+/**
+ * Shared + / − / Fit for Overview (Cytoscape) and Complete layout (Mermaid).
+ * @param {ParentNode} root
+ */
+export function wireArchitectureZoomControls(root) {
+  root.querySelectorAll("[data-cy-action]").forEach((btn) => {
+    if (btn.dataset.wiredCyZoom) return;
+    btn.dataset.wiredCyZoom = "1";
+    btn.addEventListener("click", () => {
+      const targetId = btn.getAttribute("data-cy-target");
+      const action = btn.getAttribute("data-cy-action");
+      if (!targetId || !action) return;
+      const cy = instances.get(targetId);
+      if (cy) {
+        if (action === "fit") {
+          cy.resize();
+          cy.fit(cy.elements(), DIAGRAM_FIT_PADDING);
+        } else if (action === "in") cy.zoom(cy.zoom() * DIAGRAM_ZOOM_STEP);
+        else if (action === "out") cy.zoom(cy.zoom() / DIAGRAM_ZOOM_STEP);
+        return;
+      }
+      applyMermaidZoomByHostId(targetId, action);
+    });
+  });
+}
+
 export function mountArchitectureGraphs(root, diagramGraph) {
   if (!diagramGraph?.overview) return false;
 
   const host = root.querySelector("#cedar-cy-slices");
   const ok = host ? mountCy(host, diagramGraph) !== null : false;
-
-  root.querySelectorAll("[data-cy-action]").forEach((btn) => {
-    if (btn.dataset.wired) return;
-    btn.dataset.wired = "1";
-    btn.addEventListener("click", () => {
-      const targetId = btn.getAttribute("data-cy-target");
-      const action = btn.getAttribute("data-cy-action");
-      const cy = instances.get(targetId);
-      if (!cy) return;
-      if (action === "fit") {
-        cy.resize();
-        cy.fit(cy.elements(), 56);
-      } else if (action === "in") cy.zoom(cy.zoom() * 1.1);
-      else if (action === "out") cy.zoom(cy.zoom() / 1.1);
-    });
-  });
+  wireArchitectureZoomControls(root);
   return ok;
 }
 
