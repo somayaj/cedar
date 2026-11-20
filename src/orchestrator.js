@@ -71,8 +71,11 @@ export async function runPrReviewPipeline(opts) {
   phase("fetch", "Fetch PR from GitHub", "done", `${files.length} files`);
 
   const useAiBreakouts = resolvePartitionMode(opts.partitionMode) === "ai";
+  const aiReviewEnv = String(process.env.CEDAR_AI_SLICE_REVIEW ?? "").trim().toLowerCase();
+  const hasAiKey = Boolean(process.env.CURSOR_API_KEY || process.env.OPENROUTER_API_KEY);
   const useAiReview =
-    opts.useAiReview ?? (process.env.CEDAR_AI_SLICE_REVIEW === "true");
+    opts.useAiReview ??
+    (aiReviewEnv === "true" || (hasAiKey && aiReviewEnv !== "false" && aiReviewEnv !== "0"));
 
   /** @type {import('./ai-breakouts.js').AiBreakoutPlan | null} */
   let breakoutPlan = null;

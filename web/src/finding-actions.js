@@ -160,12 +160,19 @@ async function postFindingAsComment(btn, refreshUi) {
     patch = session.filePatches?.get(`${componentId}::${path}`) ?? "";
   }
 
-  const line = firstAddedLineInPatch(patch);
+  const lineAttr = btn.getAttribute("data-finding-line");
+  const parsedLine = lineAttr ? Number.parseInt(lineAttr, 10) : 0;
+  const line = Number.isFinite(parsedLine) && parsedLine > 0 ? parsedLine : firstAddedLineInPatch(patch);
   const tag = btn.getAttribute("data-finding-tag") ?? "";
   const priority = btn.getAttribute("data-finding-priority") ?? "";
-  const tagLine = tag ? `\n**Tag:** ${tag}` : "";
-  const priorityLine = priority ? ` · **${priority}**` : "";
-  const body = `**Cedar · ${severity}**${priorityLine} (\`${ruleId}\`)${tagLine}\n\n${message}`;
+  const tagLabel = tag ? tag.charAt(0).toUpperCase() + tag.slice(1) : "";
+  const header = [priority, tagLabel].filter(Boolean).join(" · ");
+  const body = [
+    header ? `**${header}**` : `**${severity}**`,
+    `(\`${ruleId}\`)`,
+  ]
+    .filter(Boolean)
+    .join(" ") + `\n\n${message}`;
 
   btn.disabled = true;
   const prev = btn.textContent;

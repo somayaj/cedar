@@ -23,6 +23,14 @@ const RULE_META = {
   "unsafe-dom": { tag: "security", priority: "P1" },
   "unsafe-shell": { tag: "security", priority: "P1" },
   "suspicious-auth": { tag: "security", priority: "P1" },
+  "security/sql-concat": { tag: "security", priority: "P1" },
+  "security/disable-auth": { tag: "security", priority: "P1" },
+  "security/hardcoded-url": { tag: "security", priority: "P2" },
+  "quality/empty-catch": { tag: "quality", priority: "P2" },
+  "quality/swallowed-promise": { tag: "quality", priority: "P2" },
+  "quality/ts-ignore": { tag: "hygiene", priority: "P3" },
+  "quality/no-await": { tag: "quality", priority: "P3" },
+  "review/change-review": { tag: "review", priority: "P3" },
   "ai/unavailable": { tag: "ai", priority: "P2" },
   "github/review-comment": { tag: "github", priority: "P2" },
 };
@@ -83,11 +91,48 @@ export function getFindingMeta(ruleId, severity = "info") {
  */
 export function enrichFinding(finding) {
   const meta = getFindingMeta(finding.ruleId, finding.severity);
+  const tag = finding.tag ?? meta.tag;
+  const priority = finding.priority ?? meta.priority;
   return {
     ...finding,
-    tag: finding.tag ?? meta.tag,
-    priority: finding.priority ?? meta.priority,
+    tag,
+    priority,
   };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {FindingPriority | undefined}
+ */
+export function normalizeFindingPriority(value) {
+  const s = String(value ?? "").trim().toUpperCase();
+  if (s === "P0" || s === "P1" || s === "P2" || s === "P3") return s;
+  return undefined;
+}
+
+/** @type {Set<FindingTag>} */
+const KNOWN_TAGS = new Set([
+  "security",
+  "boundary",
+  "architecture",
+  "quality",
+  "hygiene",
+  "review",
+  "ai",
+  "github",
+]);
+
+/**
+ * @param {unknown} value
+ * @returns {FindingTag | undefined}
+ */
+export function normalizeFindingTag(value) {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (KNOWN_TAGS.has(/** @type {FindingTag} */ (s))) return /** @type {FindingTag} */ (s);
+  if (s.includes("sec")) return "security";
+  if (s.includes("arch")) return "architecture";
+  if (s.includes("bound")) return "boundary";
+  return undefined;
 }
 
 /** @type {Record<FindingTag, string>} */

@@ -61,10 +61,15 @@ export function buildFindingsListHtml(sliceResult, session) {
       const meta = getFindingMeta(f.ruleId, f.severity);
       const tag = f.tag ?? meta.tag;
       const priority = f.priority ?? meta.priority;
+      const line =
+        typeof f.line === "number" && f.line > 0
+          ? `<span class="cedar-badge cedar-badge-muted font-mono text-[9px]" title="Line in file">L${f.line}</span>`
+          : "";
       return `<li class="cedar-finding-card cedar-glass-subtle px-3 py-2.5${ignored ? " is-ignored" : ""}" data-finding-key="${escapeHtml(key)}">
                 <div class="flex flex-wrap items-center gap-1.5">
                   <span class="${severityClass(f.severity)}">${f.severity}</span>
                   ${renderFindingTaxonomy(f)}
+                  ${line}
                   ${fileBtn}
                   ${ignored ? '<span class="cedar-badge cedar-badge-muted">Ignored</span>' : ""}
                   ${onGithub ? '<span class="cedar-badge cedar-badge-ok">On GitHub</span>' : ""}
@@ -84,6 +89,7 @@ export function buildFindingsListHtml(sliceResult, session) {
                     data-finding-message="${escapeHtml(f.message)}"
                     data-finding-tag="${escapeHtml(tag)}"
                     data-finding-priority="${escapeHtml(priority)}"
+                    data-finding-line="${typeof f.line === "number" && f.line > 0 ? f.line : ""}"
                     data-component-id="${escapeHtml(r.componentId)}"
                     data-component-name="${escapeHtml(r.componentName)}"
                     ${!f.filename || onGithub ? "disabled" : ""}

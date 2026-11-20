@@ -1,5 +1,5 @@
 import { aiChat, parseJsonFromModel } from "./ai-chat.js";
-import { enrichFinding } from "./finding-meta.js";
+import { enrichFinding, normalizeFindingPriority, normalizeFindingTag } from "./finding-meta.js";
 import { splitPatchIntoHunks } from "./partition.js";
 
 /**
@@ -7,7 +7,8 @@ import { splitPatchIntoHunks } from "./partition.js";
  * @typedef {import('./review-engine.js').Finding} Finding
  */
 
-const PATCH_LIMIT = 12000;
+const PATCH_LIMIT = 22000;
+const PER_FILE_PATCH = 4500;
 
 /**
  * @param {MicroPr} micro
@@ -20,12 +21,25 @@ export async function aiReviewMicroSlice(micro, ctx = {}) {
   const slices = micro.files.map((f) => ({
     path: f.filename,
     status: f.status,
-    patch: (f.patch ?? "").slice(0, 2000),
+    patch: (f.patch ?? "").slice(0, PER_FILE_PATCH),
   }));
 
-  const system = `You are a strict code reviewer for one architectural slice of a PR.
-Return JSON: { "findings": [ { "ruleId": "string", "severity": "info"|"warning"|"blocker", "message": "string", "filename": "optional path" } ] }
-Max 8 findings. Focus on bugs, security, missing tests, and boundary violations. No nitpicks.`;
+  const system = `You are a senior reviewer writing inline pull-request comments on changed lines only.
+Return JSON: { "findings": [ {
+  "ruleId": "category/short-id",
+  "severity": "info"|"warning"|"blocker",
+  "priority": "P0"|"P1"|"P2"|"P3",
+  "tag": "security"|"boundary"|"architecture"|"quality"|"hygiene",
+  "message": "2-4 sentences: what changed, concrete risk, what to fix",
+  "filename": "exact path from files[].path",
+  "line": line number on the NEW file side (from + lines in patch),
+  "suggestion": "optional short fix"
+} ] }
+Rules:
+- Every finding MUST cite a real filename and line from the provided patches.
+- Write like a GitHub review comment (specific, actionable). No generic praise or slice-level summaries.
+- Use tag "security" for auth, injection, secrets, crypto, unsafe APIs.
+- Max 10 findings; skip generated/lockfile-only noise.`;
 
   const user = JSON.stringify({
     component: {
@@ -33,7 +47,7 @@ Max 8 findings. Focus on bugs, security, missing tests, and boundary violations.
       name: micro.componentName,
       depends_on: micro.dependsOn,
     },
-    pr_context: ctx.architectureSummary?.slice(0, 1500) ?? "",
+    pr_context: ctx.architectureSummary?.slice(0, 2000) ?? "",
     files: slices,
     total_patch_chars: Math.min(
       PATCH_LIMIT,
@@ -48,23 +62,33 @@ Max 8 findings. Focus on bugs, security, missing tests, and boundary violations.
       { role: "user", content: user },
     ],
     json: true,
-    maxTokens: 1500,
+    maxTokens: 2200,
   });
 
   const parsed = parseJsonFromModel(raw);
   if (!Array.isArray(parsed.findings)) return [];
 
   return parsed.findings
-    .slice(0, 8)
-    .map((f) =>
-      enrichFinding({
+    .slice(0, 10)
+    .map((f) => {
+      const suggestion = f.suggestion ? String(f.suggestion).trim() : "";
+      const baseMessage = String(f.message ?? "Review note").trim();
+      const message = suggestion ? `${baseMessage}\n\n_Suggestion:_ ${suggestion}` : baseMessage;
+      const line = Number(f.line);
+      const tag = normalizeFindingTag(f.tag);
+      const priority = normalizeFindingPriority(f.priority);
+
+      return enrichFinding({
         ruleId: `ai/${String(f.ruleId ?? "review").replace(/\s+/g, "-")}`,
         severity: normalizeSeverity(f.severity),
-        message: String(f.message ?? "Review note"),
+        message,
         filename: f.filename ? String(f.filename) : undefined,
-      })
-    )
-    .filter((f) => f.message);
+        line: Number.isFinite(line) && line > 0 ? line : undefined,
+        tag,
+        priority,
+      });
+    })
+    .filter((f) => f.message && f.filename);
 }
 
 /**

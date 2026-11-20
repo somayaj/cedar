@@ -1,6 +1,12 @@
 import { splitPatchIntoHunks } from "./partition.js";
 import { ARCHITECTURE_MODEL_LABEL, SOLID_REVIEW_CHECKLIST } from "./architecture-model.js";
 import { enrichFinding } from "./finding-meta.js";
+import {
+  firstAddedLineMatching,
+  reviewAddedLinesInPatch,
+  reviewChangeSummary,
+  withCodeAnchor,
+} from "./patch-review.js";
 
 const SECRET_PATTERNS = [
   /AKIA[0-9A-Z]{16}/,
@@ -117,28 +123,35 @@ export function reviewMicroPr(micro, ctx = {}) {
 
     const patch = file.patch ?? "";
     for (const re of SECRET_PATTERNS) {
-      if (re.test(patch)) {
-        note({
-          ruleId: "possible-secret",
-          severity: "blocker",
-          message: "Patch may contain secrets or private key material.",
-          filename: name,
-        });
-        break;
-      }
+      const hit = firstAddedLineMatching(patch, re);
+      if (!hit) continue;
+      note({
+        ruleId: "possible-secret",
+        severity: "blocker",
+        message: withCodeAnchor("Remove secrets from source; rotate credentials and load via env/secret store.", hit),
+        filename: name,
+        line: hit.line,
+        tag: "security",
+        priority: "P0",
+      });
+      break;
     }
 
     for (const { ruleId, re, message } of SECURITY_PATCH_PATTERNS) {
-      if (re.test(patch)) {
-        note({
-          ruleId,
-          severity: ruleId === "suspicious-auth" ? "warning" : "warning",
-          message,
-          filename: name,
-        });
-        break;
-      }
+      const hit = firstAddedLineMatching(patch, re);
+      if (!hit) continue;
+      note({
+        ruleId,
+        severity: "warning",
+        message: withCodeAnchor(message, hit),
+        filename: name,
+        line: hit.line,
+        tag: "security",
+        priority: ruleId === "suspicious-auth" ? "P1" : "P1",
+      });
     }
+
+    reviewAddedLinesInPatch(name, patch, note);
 
     if (/\.env(\.|$)/.test(name) && file.status !== "removed") {
       note({
@@ -184,55 +197,54 @@ export function reviewMicroPr(micro, ctx = {}) {
     const hunks = splitPatchIntoHunks(patch);
     hunksReviewed += hunks.length;
 
-    for (const hunk of hunks) {
-      if (/TODO|FIXME|HACK/.test(hunk)) {
-        note({
-          ruleId: "todo-in-hunk",
-          severity: "info",
-          message: "Hunk introduces TODO/FIXME/HACK marker.",
-          filename: name,
-        });
-      }
-      if (/console\.(log|debug)\(/.test(hunk)) {
-        note({
-          ruleId: "debug-log",
-          severity: "info",
-          message: "Console logging in changed hunk.",
-          filename: name,
-        });
-      }
+    const todoHit = firstAddedLineMatching(patch, /\b(TODO|FIXME|HACK)\b/);
+    if (todoHit) {
+      note({
+        ruleId: "todo-in-hunk",
+        severity: "info",
+        message: withCodeAnchor("Follow-up marker left in production path — track ticket or resolve before merge.", todoHit),
+        filename: name,
+        line: todoHit.line,
+        tag: "hygiene",
+        priority: "P3",
+      });
+    }
+    const logHit = firstAddedLineMatching(patch, /console\.(log|debug|info)\(/);
+    if (logHit) {
+      note({
+        ruleId: "debug-log",
+        severity: "info",
+        message: withCodeAnchor("Debug logging in changed code — remove or gate behind logger level.", logHit),
+        filename: name,
+        line: logHit.line,
+        tag: "hygiene",
+        priority: "P3",
+      });
     }
   }
 
-  ensureSpotCheckFindings(micro, findings, note);
+  ensureFileReviewFindings(micro, findings, note);
   return finalizeMicroReview(micro, findings, hunksReviewed);
 }
 
 /**
- * When heuristics find nothing actionable, surface file-level spot-check items so the findings panel has targets.
- *
  * @param {import('./partition.js').MicroPr} micro
  * @param {Finding[]} findings
  * @param {(raw: Finding) => void} note
  */
-function ensureSpotCheckFindings(micro, findings, note) {
-  const substantive = findings.filter((f) => f.ruleId !== "skip-generated");
+function ensureFileReviewFindings(micro, findings, note) {
+  const substantive = findings.filter((f) => f.ruleId !== "skip-generated" && f.ruleId !== "review/change-review");
   if (substantive.length > 0) return;
 
   const candidates = [...micro.files]
     .filter((f) => !SKIP_PATH_FRAGMENTS.some((s) => f.filename.includes(s)))
     .sort((a, b) => b.additions + b.deletions - (a.additions + a.deletions))
-    .slice(0, 4);
-
-  if (!candidates.length) return;
+    .slice(0, 2);
 
   for (const file of candidates) {
-    note({
-      ruleId: "review/spot-check",
-      severity: "info",
-      message: `No automated flags; spot-check this change (+${file.additions}/-${file.deletions}).`,
-      filename: file.filename,
-    });
+    if ((file.patch ?? "").trim()) {
+      reviewChangeSummary(file.filename, file.patch ?? "", note);
+    }
   }
 }
 
