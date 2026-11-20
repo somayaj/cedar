@@ -588,7 +588,7 @@ export async function loadDiffReviewComments(root) {
       session.data?.microPrs ?? []
     );
     repaintAllDiffComments(root);
-    window.__cedarRefreshReviewUi?.();
+    window.__cedarPatchFindings?.();
   } catch (err) {
     showCommentToast(err instanceof Error ? err.message : String(err), "error");
   }

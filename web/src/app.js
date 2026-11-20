@@ -31,7 +31,7 @@ import {
   setFindingToast,
   wireFindingActions,
 } from "./finding-actions.js";
-import { FINDING_TAG_CLASS, getFindingMeta } from "../../src/finding-meta.js";
+import { buildFindingsListHtml } from "./review-findings-ui.js";
 
 /**
  * @param {string} [status]
@@ -289,7 +289,7 @@ let sliceApprovals = new Set();
 
 function finishReviewUi(container) {
   bindApproveHandlers(container);
-  wireFindingActions(container, refreshReviewUi);
+  wireFindingActions(container, patchFindingsAndMetrics);
   wireFileReviewToggles(container);
   void loadDiffReviewComments(container);
 }
@@ -303,7 +303,136 @@ function refreshReviewUi() {
   renderResults(results, session.data);
 }
 
-window.__cedarRefreshReviewUi = refreshReviewUi;
+window.__cedarPatchFindings = patchFindingsAndMetrics;
+
+function patchFindingsAndMetrics() {
+  const session = window.__cedarSession;
+  const container = document.getElementById("results");
+  if (!session?.data || !container) return;
+
+  const { microResults } = session.data;
+  for (const r of microResults.filter((res) => res.status !== "skipped")) {
+    const panel = container.querySelector(`[data-slice-panel="${CSS.escape(r.componentId)}"]`);
+    if (!panel) continue;
+
+    const { html, activeCount } = buildFindingsListHtml(r, session);
+    const body = panel.querySelector(".cedar-findings-panel > .mt-3");
+    const details = panel.querySelector(".cedar-findings-panel");
+    if (body) body.innerHTML = html;
+    if (details instanceof HTMLDetailsElement) {
+      const sum = details.querySelector("summary");
+      if (sum) sum.textContent = `Review findings${activeCount ? ` (${activeCount})` : ""}`;
+      if (activeCount) details.open = true;
+    }
+    patchSliceFindingBadges(panel, r, session);
+  }
+
+  patchPrHeaderMetrics(session.data);
+  wireFindingActions(container, patchFindingsAndMetrics);
+}
+
+/**
+ * @param {HTMLElement} panel
+ */
+function patchSliceFindingBadges(panel, r, session) {
+  const row = panel.querySelector("[data-slice-badges]");
+  if (!row) return;
+  const sliceFindings = findingsForSlice(r.componentId, r, session);
+  const activeFindings = sliceFindings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
+  const blockers = activeFindings.filter((f) => f.severity === "blocker").length;
+  const warnings = activeFindings.filter((f) => f.severity === "warning").length;
+  row.querySelector("[data-slice-blockers]")?.remove();
+  row.querySelector("[data-slice-warnings]")?.remove();
+  if (blockers) {
+    row.insertAdjacentHTML(
+      "beforeend",
+      `<span data-slice-blockers class="cedar-badge border-rose-500/30 bg-rose-500/10 text-rose-200">${blockers} blockers</span>`
+    );
+  }
+  if (warnings) {
+    row.insertAdjacentHTML(
+      "beforeend",
+      `<span data-slice-warnings class="cedar-badge cedar-badge-warn">${warnings} warnings</span>`
+    );
+  }
+}
+
+function patchPrHeaderMetrics(data) {
+  const session = window.__cedarSession;
+  sliceApprovals = session?.sliceApprovals ?? sliceApprovals;
+  const { gate, microResults } = data;
+  const touched = microResults.filter((r) => r.status !== "skipped");
+  const approvedCount = touched.filter((r) => sliceApprovals.has(r.componentId)).length;
+  const allSlicesApproved = touched.length > 0 && approvedCount === touched.length;
+  const canApprovePr = gate.ready && allSlicesApproved;
+  const approvePct = touched.length ? Math.round((approvedCount / touched.length) * 100) : 0;
+  const confidence = mergeConfidence(gate, microResults);
+
+  const statValues = document.querySelectorAll(".cedar-pr-header-metrics .cedar-pr-stat-value");
+  const confVal = statValues[0];
+  const approvedVal = statValues[1];
+  if (confVal) {
+    const num = confVal.querySelector(".cedar-pr-stat-num");
+    if (num) num.textContent = String(confidence.score);
+    confVal.className = `cedar-pr-stat-value tabular-nums ${confidence.color}`;
+    const caption = document.querySelector(".cedar-pr-stat-caption");
+    if (caption) caption.textContent = confidence.label;
+  }
+  if (approvedVal) {
+    const num = approvedVal.querySelector(".cedar-pr-stat-num");
+    const denom = approvedVal.querySelector(".cedar-pr-stat-denom");
+    if (num) num.textContent = String(approvedCount);
+    if (denom) denom.textContent = `/${touched.length}`;
+  }
+  const progress = document.querySelector(".cedar-pr-stat-progress");
+  const fill = document.querySelector(".cedar-pr-stat-progress-fill");
+  if (progress) progress.setAttribute("aria-valuenow", String(approvePct));
+  if (fill) fill.style.width = `${approvePct}%`;
+
+  const prBtn = document.getElementById("approve-pr-btn");
+  if (prBtn instanceof HTMLButtonElement) {
+    prBtn.disabled = !canApprovePr;
+    prBtn.classList.toggle("is-ready", canApprovePr);
+    prBtn.title = canApprovePr
+      ? "Approve the full pull request on GitHub"
+      : "Mark every slice approved in Cedar first";
+  }
+}
+
+function patchSliceApprovalState(componentId) {
+  const container = document.getElementById("results");
+  if (!container) return;
+
+  const panel = container.querySelector(`[data-slice-panel="${CSS.escape(componentId)}"]`);
+  const btn = panel?.querySelector(`[data-approve-slice="${CSS.escape(componentId)}"]`);
+  if (btn instanceof HTMLButtonElement) {
+    btn.disabled = true;
+    btn.textContent = "Approved";
+    btn.classList.remove("is-ready");
+    btn.classList.add("is-done");
+  }
+
+  const metrics = panel?.querySelector("[data-slice-badges]");
+  if (metrics && !metrics.querySelector("[data-slice-approved-badge]")) {
+    metrics.insertAdjacentHTML(
+      "beforeend",
+      '<span class="cedar-badge cedar-badge-ok" data-slice-approved-badge>Approved</span>'
+    );
+  }
+
+  container.querySelectorAll(`[data-slice-tab="${CSS.escape(componentId)}"]`).forEach((tab) => {
+    if (tab.querySelector(".cedar-nav-item-check")) return;
+    tab.insertAdjacentHTML("beforeend", '<span class="cedar-nav-item-check">✓</span>');
+  });
+
+  container.querySelectorAll(`[data-scroll-slice="${CSS.escape(componentId)}"]`).forEach((navBtn) => {
+    const row = navBtn.querySelector(".cedar-nav-item-row");
+    if (!row || row.querySelector(".cedar-nav-item-check")) return;
+    row.insertAdjacentHTML("beforeend", '<span class="cedar-nav-item-check">✓</span>');
+  });
+
+  if (window.__cedarSession?.data) patchPrHeaderMetrics(window.__cedarSession.data);
+}
 
 function mergeConfidence(gate, microResults) {
   const session = window.__cedarSession;
@@ -314,25 +443,6 @@ function mergeConfidence(gate, microResults) {
   if (warnings > 3) return { score: 3, label: "Review carefully", color: "text-amber-200" };
   if (warnings > 0) return { score: 4, label: "Likely safe", color: "text-emerald-300" };
   return { score: 5, label: "Safe to merge", color: "text-emerald-400" };
-}
-
-function severityClass(sev) {
-  if (sev === "blocker") return "severity-blocker";
-  if (sev === "warning") return "severity-warning";
-  return "severity-info";
-}
-
-/**
- * @param {{ ruleId?: string, severity?: string, tag?: string, priority?: string }} f
- */
-function renderFindingTaxonomy(f) {
-  const meta = getFindingMeta(f.ruleId, f.severity);
-  const tag = f.tag ?? meta.tag;
-  const tagLabel = meta.tagLabel;
-  const priority = f.priority ?? meta.priority;
-  const tagClass = FINDING_TAG_CLASS[tag] ?? "cedar-finding-tag-quality";
-  return `<span class="cedar-finding-priority" title="Priority">${priority}</span>
-    <span class="cedar-finding-tag ${tagClass}" title="Category">${escapeHtml(tagLabel)}</span>`;
 }
 
 function cyToolbar(targetId, badge = "") {
@@ -998,61 +1108,16 @@ function renderResults(container, data) {
     .map((r, i) => {
       const micro = microPrs.find((m) => m.componentId === r.componentId);
       const rationale = micro?.rationale ?? micro?.description;
-      const sliceFindings = findingsForSlice(r.componentId, r, window.__cedarSession);
-      const activeFindings = sliceFindings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
+      const session = window.__cedarSession;
+      const { html: findings, activeCount } = buildFindingsListHtml(r, session);
+      const activeFindings = findingsForSlice(r.componentId, r, session).filter(
+        (f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi))
+      );
       const blockers = activeFindings.filter((f) => f.severity === "blocker").length;
       const warnings = activeFindings.filter((f) => f.severity === "warning").length;
       const approved = sliceApprovals.has(r.componentId);
       const vpr = virtualPrLabel(target, pull, r.componentId, i + 1, sliceTotal);
       const fileList = micro?.files ?? [];
-      const posted = window.__cedarSession?.findingCommentsPosted ?? new Set();
-
-      const findings =
-        sliceFindings.length === 0
-          ? `<p class="text-sm italic text-zinc-600">No findings yet — run review or reload GitHub comments.</p>`
-          : `<ul class="cedar-findings-list space-y-2">${sliceFindings
-              .slice(0, 24)
-              .map((f, fi) => {
-                const key = findingKey(r.componentId, f, fi);
-                const ignored = isFindingIgnored(key);
-                const onGithub = posted.has(key) || f.source === "github";
-                const fileBtn = f.filename
-                  ? `<button type="button" class="cedar-finding-file cedar-btn-link text-[11px]" data-finding-jump data-filename="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</button>`
-                  : "";
-                const meta = getFindingMeta(f.ruleId, f.severity);
-                const tag = f.tag ?? meta.tag;
-                const priority = f.priority ?? meta.priority;
-                return `<li class="cedar-finding-card cedar-glass-subtle px-4 py-3${ignored ? " is-ignored" : ""}" data-finding-key="${escapeHtml(key)}">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="${severityClass(f.severity)}">${f.severity}</span>
-                  ${renderFindingTaxonomy(f)}
-                  ${fileBtn}
-                  ${ignored ? '<span class="cedar-badge cedar-badge-muted">Ignored</span>' : ""}
-                  ${onGithub ? '<span class="cedar-badge cedar-badge-ok">On GitHub</span>' : ""}
-                </div>
-                <p class="cedar-finding-message mt-2 text-sm leading-relaxed text-zinc-300">${escapeHtml(f.message)}</p>
-                <div class="cedar-finding-actions mt-3 flex flex-wrap gap-2">
-                  ${
-                    ignored
-                      ? `<button type="button" class="cedar-btn-secondary cedar-btn-compact" data-finding-unignore data-finding-key="${escapeHtml(key)}">Restore</button>`
-                      : `<button type="button" class="cedar-btn-secondary cedar-btn-compact" data-finding-ignore data-finding-key="${escapeHtml(key)}">Ignore</button>`
-                  }
-                  <button type="button" class="cedar-btn-secondary cedar-btn-compact" data-finding-comment
-                    data-finding-key="${escapeHtml(key)}"
-                    data-filename="${escapeHtml(f.filename ?? "")}"
-                    data-finding-severity="${escapeHtml(f.severity)}"
-                    data-finding-rule="${escapeHtml(f.ruleId ?? "finding")}"
-                    data-finding-message="${escapeHtml(f.message)}"
-                    data-finding-tag="${escapeHtml(tag)}"
-                    data-finding-priority="${escapeHtml(priority)}"
-                    data-component-id="${escapeHtml(r.componentId)}"
-                    data-component-name="${escapeHtml(r.componentName)}"
-                    ${!f.filename || onGithub ? "disabled" : ""}
-                    title="${!f.filename ? "No file path for this finding" : onGithub ? "Already on GitHub" : "Post as inline review comment on GitHub"}">${onGithub ? "On GitHub" : "Save as comment"}</button>
-                </div>
-              </li>`;
-              })
-              .join("")}</ul>`;
 
       return `
         <article id="slice-${escapeHtml(r.componentId)}" class="cedar-slice-panel" data-slice-panel="${escapeHtml(r.componentId)}" data-virtual-pr="${escapeHtml(vpr.id)}"${
@@ -1063,13 +1128,13 @@ function renderResults(container, data) {
               <p class="cedar-label">${escapeHtml(vpr.title)}</p>
               <h3 class="mt-2 text-sm font-semibold text-white">${escapeHtml(r.componentName)}</h3>
               <p class="mt-1 font-mono text-xs text-zinc-500">${escapeHtml(vpr.slug)}</p>
-              <div class="mt-4 flex flex-wrap gap-2">
+              <div class="mt-4 flex flex-wrap gap-2" data-slice-badges>
                 ${renderSliceReviewBadge(r.status)}
                 <span class="cedar-badge cedar-badge-muted">+${micro?.additions ?? 0} / −${micro?.deletions ?? 0}</span>
                 <span class="cedar-badge cedar-badge-muted">${fileList.length} files</span>
-                ${blockers ? `<span class="cedar-badge border-rose-500/30 bg-rose-500/10 text-rose-200">${blockers} blockers</span>` : ""}
-                ${warnings ? `<span class="cedar-badge cedar-badge-warn">${warnings} warnings</span>` : ""}
-                ${approved ? `<span class="cedar-badge cedar-badge-ok">Approved</span>` : ""}
+                ${blockers ? `<span data-slice-blockers class="cedar-badge border-rose-500/30 bg-rose-500/10 text-rose-200">${blockers} blockers</span>` : ""}
+                ${warnings ? `<span data-slice-warnings class="cedar-badge cedar-badge-warn">${warnings} warnings</span>` : ""}
+                ${approved ? `<span class="cedar-badge cedar-badge-ok" data-slice-approved-badge>Approved</span>` : ""}
               </div>
               ${
                 rationale
@@ -1089,9 +1154,9 @@ function renderResults(container, data) {
           </div>
           <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
             ${renderSliceFileReviews(fileList, pull.url)}
-            <details class="group cedar-findings-panel"${activeFindings.length ? " open" : ""}>
+            <details class="group cedar-findings-panel"${activeCount ? " open" : ""}>
               <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Review findings${
-                activeFindings.length ? ` (${activeFindings.length})` : ""
+                activeCount ? ` (${activeCount})` : ""
               }</summary>
               <div class="mt-3">${findings}</div>
             </details>
@@ -1383,7 +1448,7 @@ function approveSlice(btn) {
 
   session.sliceApprovals.add(componentId);
   showToast(`Marked approved · ${btn.dataset.componentName ?? componentId}`);
-  refreshReviewUi();
+  patchSliceApprovalState(componentId);
 }
 
 async function approveFullPr() {

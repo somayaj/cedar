@@ -58,19 +58,19 @@
   }
 
   .cedar-btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold tracking-tight text-black shadow-[0_1px_0_rgba(255,255,255,0.08)_inset,0_8px_24px_rgba(0,0,0,0.35)] transition duration-200 hover:bg-zinc-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white/[0.92] px-3 py-1.5 text-[11px] font-semibold tracking-tight text-black shadow-[0_1px_0_rgba(255,255,255,0.15)_inset] transition duration-150 hover:bg-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45;
   }
 
   .cedar-btn-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-white/25 hover:bg-white/[0.07] disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-300 transition hover:border-white/18 hover:bg-white/[0.07] hover:text-zinc-100 disabled:opacity-40;
   }
 
   .cedar-btn-compact {
-    @apply px-4 py-2.5 text-sm;
+    @apply min-h-0 px-2 py-0.5 text-[10px] leading-snug;
   }
 
   .cedar-btn-signoff {
-    @apply inline-flex h-8 shrink-0 items-center justify-center rounded-lg border px-3 text-[11px] font-semibold tracking-tight transition duration-150 disabled:cursor-not-allowed disabled:opacity-45;
+    @apply inline-flex h-7 shrink-0 items-center justify-center rounded-lg border px-2.5 text-[10px] font-semibold tracking-tight transition duration-150 disabled:cursor-not-allowed disabled:opacity-45;
   }
 
   .cedar-btn-slice {
@@ -86,11 +86,11 @@
   }
 
   .cedar-btn-approve-pr {
-    @apply h-9 min-w-[7.5rem] border-white/10 bg-white/[0.06] text-zinc-400;
+    @apply h-7 min-w-[6.75rem] border-white/10 bg-white/[0.04] text-zinc-400;
   }
 
   .cedar-btn-approve-pr.is-ready {
-    @apply border-white/20 bg-white text-black shadow-[0_1px_0_rgba(255,255,255,0.2)_inset] hover:bg-zinc-100;
+    @apply border-white/18 bg-white/[0.92] text-black shadow-[0_1px_0_rgba(255,255,255,0.12)_inset] hover:bg-white;
   }
 
   .cedar-slice-panel .cedar-btn-slice {
@@ -464,7 +464,7 @@
   }
 
   .diagram-tool-btn {
-    @apply inline-flex h-7 min-w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white;
+    @apply inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] px-1.5 text-[10px] font-medium text-zinc-400 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-zinc-100;
   }
 
   .cedar-diagram-slice-badges {
@@ -774,7 +774,7 @@
   }
 
   .cedar-diff-focus-btn {
-    @apply rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-medium text-zinc-400 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-zinc-200;
+    @apply rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-medium text-zinc-400 transition hover:border-white/16 hover:bg-white/[0.07] hover:text-zinc-200;
   }
 
   .cedar-diff-focus-btn[aria-pressed="true"] {
