@@ -29,16 +29,14 @@ export function groupGithubCommentFindings(comments, microPrs) {
     const comp = pathToComponent.get(path);
     if (!comp) continue;
 
-    const login = comment.user?.login ? `@${comment.user.login}` : "reviewer";
-    const excerpt = String(comment.body ?? "").trim().replace(/\s+/g, " ").slice(0, 240);
+    const body = String(comment.body ?? "").trim();
+    const excerpt = body.replace(/\s+/g, " ").slice(0, 600);
     const line = comment.line ?? comment.original_line;
 
     const finding = enrichFinding({
       ruleId: "github/review-comment",
       severity: "info",
-      message: excerpt
-        ? `GitHub comment (${login}): ${excerpt}${comment.body && comment.body.length > 240 ? "…" : ""}`
-        : `GitHub review comment on this file (${login}).`,
+      message: excerpt || "Existing review comment on this line.",
       filename: path,
       line: typeof line === "number" ? line : undefined,
       source: "github",

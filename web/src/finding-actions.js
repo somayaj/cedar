@@ -115,8 +115,14 @@ export function wireFindingActions(root, refreshUi) {
       const path = btn.getAttribute("data-filename");
       const panel = btn.closest("[data-slice-panel]");
       if (!path || !(panel instanceof HTMLElement)) return;
+      const lineAttr = btn.getAttribute("data-finding-line");
+      const line = lineAttr ? Number.parseInt(lineAttr, 10) : 0;
       const article = panel.querySelector(`[data-file-review][data-file-path="${CSS.escape(path)}"]`);
       article?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (article && Number.isFinite(line) && line > 0) {
+        const row = article.querySelector(`[data-line-number="${line}"], .d2h-code-linenumber`);
+        row?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      }
     });
   });
 
@@ -139,8 +145,6 @@ async function postFindingAsComment(btn, refreshUi) {
 
   const key = btn.getAttribute("data-finding-key");
   const path = btn.getAttribute("data-filename");
-  const severity = btn.getAttribute("data-finding-severity") ?? "info";
-  const ruleId = btn.getAttribute("data-finding-rule") ?? "finding";
   const message = btn.getAttribute("data-finding-message") ?? "";
   const componentId = btn.getAttribute("data-component-id") ?? "";
   const componentName = btn.getAttribute("data-component-name") ?? componentId;
@@ -168,13 +172,11 @@ async function postFindingAsComment(btn, refreshUi) {
   const tag = btn.getAttribute("data-finding-tag") ?? "";
   const priority = btn.getAttribute("data-finding-priority") ?? "";
   const tagLabel = tag ? tag.charAt(0).toUpperCase() + tag.slice(1) : "";
-  const header = [priority, tagLabel].filter(Boolean).join(" · ");
-  const body = [
-    header ? `**${header}**` : `**${severity}**`,
-    `(\`${ruleId}\`)`,
-  ]
-    .filter(Boolean)
-    .join(" ") + `\n\n${message}`;
+  const chips = [priority, tagLabel].filter(Boolean);
+  const body =
+    chips.length > 0
+      ? `${message.trim()}\n\n---\n_${chips.join(" · ")} · Cedar review_`
+      : `${message.trim()}\n\n---\n_Cedar review_`;
 
   btn.disabled = true;
   const prev = btn.textContent;

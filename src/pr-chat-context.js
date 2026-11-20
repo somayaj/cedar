@@ -5,7 +5,7 @@ import { isCodeReviewFinding } from "./finding-meta.js";
  * @param {object} report
  */
 export function prChatContextFromReport(report) {
-  const { target, pull, gate, partition, breakouts, microPrs, microResults, composite } = report;
+  const { target, pull, gate, partition, breakouts, microPrs, microResults, composite, macroReview } = report;
   const slices = (microResults ?? [])
     .filter((r) => r.status !== "skipped")
     .map((r) => {
@@ -49,5 +49,7 @@ export function prChatContextFromReport(report) {
     slices,
     compositeReady: Boolean(composite?.body),
     compositeExcerpt: composite?.body?.slice(0, 1500),
+    macroReview: macroReview?.body?.slice(0, 2500) ?? null,
+    macroVerdict: macroReview?.event ?? null,
   };
 }

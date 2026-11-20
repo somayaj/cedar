@@ -291,6 +291,7 @@ function finishReviewUi(container) {
   bindApproveHandlers(container);
   wireFindingActions(container, patchFindingsAndMetrics);
   wireFileReviewToggles(container);
+  wireMacroReviewPost(container);
   void loadDiffReviewComments(container);
 }
 
@@ -321,7 +322,7 @@ function patchFindingsAndMetrics() {
     if (body) body.innerHTML = html;
     if (details instanceof HTMLDetailsElement) {
       const sum = details.querySelector("summary");
-      if (sum) sum.textContent = `Review findings${activeCount ? ` (${activeCount})` : ""}`;
+      if (sum) sum.textContent = `Micro review · files${activeCount ? ` (${activeCount})` : ""}`;
       if (activeCount) details.open = true;
     }
     patchSliceFindingBadges(panel, r, session);
@@ -443,6 +444,36 @@ function mergeConfidence(gate, microResults) {
   if (warnings > 3) return { score: 3, label: "Review carefully", color: "text-amber-200" };
   if (warnings > 0) return { score: 4, label: "Likely safe", color: "text-emerald-300" };
   return { score: 5, label: "Safe to merge", color: "text-emerald-400" };
+}
+
+/**
+ * @param {{ body?: string, event?: string, priority?: string } | null | undefined} macroReview
+ */
+function renderMacroReviewPanel(macroReview) {
+  if (!macroReview?.body?.trim()) {
+    return `<section class="cedar-glass-subtle cedar-macro-review mb-6 px-5 py-4" aria-labelledby="cedar-macro-review-heading">
+      <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Macro review · entire PR</h2>
+      <p class="mt-2 text-xs leading-relaxed text-zinc-500">Whole-PR feedback from Composer (architecture, risks, merge recommendation). Generated after <strong class="font-medium text-zinc-400">micro</strong> slice comments. Re-run review with <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> if empty.</p>
+    </section>`;
+  }
+  const event = macroReview.event ?? "COMMENT";
+  const eventLabel =
+    event === "APPROVE" ? "Suggests approve" : event === "REQUEST_CHANGES" ? "Suggests changes" : "Review comment";
+  return `<section class="cedar-glass-subtle cedar-macro-review mb-6 px-5 py-4" aria-labelledby="cedar-macro-review-heading">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Macro review · entire PR</h2>
+        <p class="mt-1 text-[10px] text-zinc-500">Big-picture PR comment · micro comments stay on slices below</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="cedar-badge cedar-badge-muted text-[9px]">${escapeHtml(eventLabel)}</span>
+        ${macroReview.priority ? `<span class="cedar-finding-priority text-[10px]">${escapeHtml(macroReview.priority)}</span>` : ""}
+        <button type="button" id="post-macro-review-btn" class="cedar-btn-secondary cedar-btn-compact" data-macro-event="${escapeHtml(event)}"
+          title="Post this text as a single GitHub pull request review comment">Post PR comment</button>
+      </div>
+    </div>
+    <pre class="cedar-macro-review-body mt-4 max-h-[min(42vh,28rem)] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">${escapeHtml(macroReview.body)}</pre>
+  </section>`;
 }
 
 function cyToolbar(targetId, badge = "") {
@@ -956,7 +987,8 @@ function wireSliceTabs(root, initialSliceId = "") {
 }
 
 function renderResults(container, data) {
-  const { pull, gate, microPrs, microResults, composite, breakouts, partition, process, target } = data;
+  const { pull, gate, microPrs, microResults, macroReview, composite, breakouts, partition, process, target } = data;
+  const macroReviewHtml = renderMacroReviewPanel(macroReview);
   sliceApprovals = window.__cedarSession?.sliceApprovals ?? sliceApprovals;
   ensureFindingSession(window.__cedarSession);
 
@@ -1155,7 +1187,7 @@ function renderResults(container, data) {
           <div class="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
             ${renderSliceFileReviews(fileList, pull.url)}
             <details class="group cedar-findings-panel"${activeCount ? " open" : ""}>
-              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Review findings${
+              <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Micro review · files in this slice${
                 activeCount ? ` (${activeCount})` : ""
               }</summary>
               <div class="mt-3">${findings}</div>
@@ -1195,6 +1227,8 @@ function renderResults(container, data) {
         </button>
       </div>
     </header>
+
+    ${macroReviewHtml}
 
     <div class="cedar-review-layout">
       <aside class="cedar-review-sidebar space-y-2 lg:sticky lg:top-20 lg:self-start">
@@ -1431,6 +1465,54 @@ function renderResults(container, data) {
   });
 
   finishReviewUi(container);
+}
+
+function wireMacroReviewPost(root) {
+  const btn = root.querySelector("#post-macro-review-btn");
+  if (!(btn instanceof HTMLButtonElement)) return;
+  if (btn.dataset.wiredMacro) return;
+  btn.dataset.wiredMacro = "1";
+  btn.addEventListener("click", () => void postMacroReview());
+}
+
+async function postMacroReview() {
+  const session = window.__cedarSession;
+  const macro = session?.data?.macroReview;
+  const btn = document.getElementById("post-macro-review-btn");
+  if (!session || !macro?.body?.trim()) {
+    showToast("No macro review text to post.", "error");
+    return;
+  }
+  const prev = btn instanceof HTMLButtonElement ? btn.textContent : "";
+  if (btn instanceof HTMLButtonElement) {
+    btn.disabled = true;
+    btn.textContent = "Posting…";
+  }
+  try {
+    const res = await fetch("/api/macro-review/post", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prUrl: session.prUrl,
+        token: session.token,
+        owner: session.data.target?.owner,
+        repo: session.data.target?.repo,
+        pr: session.data.target?.pr,
+        body: macro.body,
+        event: macro.event ?? "COMMENT",
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? json.hint ?? "Post failed");
+    showToast("Posted macro review on GitHub");
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : String(err), "error");
+  } finally {
+    if (btn instanceof HTMLButtonElement) {
+      btn.disabled = false;
+      btn.textContent = prev || "Post PR comment";
+    }
+  }
 }
 
 function bindApproveHandlers(root) {

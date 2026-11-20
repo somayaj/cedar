@@ -1442,6 +1442,14 @@
     @apply border-slate-400/35 bg-slate-500/20 text-slate-100;
   }
 
+  .cedar-review-comment-body {
+    @apply whitespace-pre-wrap;
+  }
+
+  .cedar-review-comment-card.is-ignored .cedar-review-comment-body {
+    @apply text-zinc-500 line-through decoration-zinc-600;
+  }
+
   .cedar-finding-card.is-ignored .cedar-finding-message {
     @apply text-zinc-500 line-through decoration-zinc-600;
   }

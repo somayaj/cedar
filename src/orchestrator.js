@@ -3,6 +3,7 @@ import { loadComponentsConfig } from "./load-config.js";
 import { partitionPrByComponents, partitionPrByAssignments } from "./partition.js";
 import { discoverArchitecturalBreakouts } from "./ai-breakouts.js";
 import { aiReviewMicroSlice } from "./ai-micro-review.js";
+import { aiMacroPrReview } from "./ai-macro-review.js";
 import {
   createClient,
   fetchPullRequest,
@@ -231,6 +232,29 @@ export async function runPrReviewPipeline(opts) {
   const { pipelineDot, pipelineSvg } = pipelineRendered;
   phase("review", "Micro reviews & diagrams", "done", diagramVisualSource ?? "heuristic");
 
+  /** @type {import('./ai-macro-review.js').ReturnType<typeof aiMacroPrReview> extends Promise<infer T> ? T : never} */
+  let macroReview = null;
+  if (useAiReview && sliceReviewAiAvailable()) {
+    phase("macro", "Macro PR review", "running");
+    try {
+      macroReview = await aiMacroPrReview({
+        pull: {
+          title: pull.title,
+          number: pull.number,
+          headSha: pull.head.sha,
+        },
+        breakouts: breakoutPlan ?? undefined,
+        microPrs: ordered,
+        microResults,
+      });
+      phase("macro", "Macro PR review", "done", macroReview ? "Composer" : "empty");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      phase("macro", "Macro PR review", "blocked", message.slice(0, 80));
+      console.warn("[cedar] Macro PR review failed:", err);
+    }
+  }
+
   const touched = microResults.filter((r) => r.status !== "skipped");
   const allSlicesReviewed = touched.every((r) => r.status === "passed" || r.status === "failed");
   const allPassed = touched.every((r) => r.status === "passed");
@@ -367,6 +391,7 @@ export async function runPrReviewPipeline(opts) {
       })),
     })),
     microResults,
+    macroReview,
     gate,
     composite,
     outputMarkdown,
@@ -420,9 +445,7 @@ async function runMicroReviewPass(ordered, ctx) {
         const aiFindings = await aiReviewMicroSlice(micro, {
           architectureSummary: ctx.breakoutPlan?.architectureSummary,
         });
-        if (aiFindings.length) {
-          result = { ...result, reviewComments: aiFindings };
-        }
+        result = { ...result, reviewComments: aiFindings };
       } catch (err) {
         if (isAiAuthError(err)) {
           aiSliceReviewStopped = true;
@@ -512,9 +535,15 @@ function buildProcessSteps(ctx) {
     },
     {
       id: "micro",
-      label: "Micro-PR reviews",
+      label: "Micro review (per slice / file)",
       status: microPass ? "done" : microDone.some((r) => r.status === "failed") ? "blocked" : "done",
-      detail: `${microDone.length} reviewed`,
+      detail: `${microDone.length} slice(s)`,
+    },
+    {
+      id: "macro",
+      label: "Macro review (entire PR)",
+      status: "done",
+      detail: "Composer after micro",
     },
     {
       id: "approve-slices",

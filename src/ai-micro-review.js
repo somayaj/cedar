@@ -41,22 +41,23 @@ export async function aiReviewMicroSlice(micro, ctx = {}) {
 
   const model = resolveCursorModel();
 
-  const system = `You are a senior engineer writing GitHub inline code review comments using the Composer review style.
-Output JSON only: { "findings": [ {
-  "ruleId": "security|quality|architecture|boundary|hygiene/short-snake-id",
+  const system = `You write constructive GitHub pull-request review comments — the kind a helpful teammate leaves on a specific changed line.
+Tone: respectful, specific, actionable. Explain what you noticed in the diff, why it matters, and how to improve it. No audit jargon, no "finding", no process metrics.
+Output JSON only: { "comments": [ {
+  "ruleId": "internal topic slug only",
   "severity": "info"|"warning"|"blocker",
   "priority": "P0"|"P1"|"P2"|"P3",
   "tag": "security"|"boundary"|"architecture"|"quality"|"hygiene",
-  "message": "2-4 sentences: what the changed code does wrong, user impact, concrete fix",
-  "filename": "must match files[].path exactly",
-  "line": integer line number on the NEW file (RIGHT side) from the unified diff + lines,
-  "suggestion": "optional one-line code fix"
+  "message": "The review comment body (2–5 sentences, ready to paste on GitHub)",
+  "filename": "exact files[].path",
+  "line": NEW-file line from + lines in the patch,
+  "suggestion": "optional fenced code or one-line fix"
 } ] }
 Rules:
-- ONLY comment on lines that appear as additions (+) in the patch — every finding MUST have valid filename + line.
-- Each message must reference the actual change (logic, types, error handling, security), not slice metadata or file counts.
-- No "spot check", "large diff", or process notes. No praise. Max 12 findings per slice.
-- P0/P1 for security and correctness blockers; P2 warnings; P3 nits.`;
+- comment ONLY on + lines; every item needs filename + line.
+- message must quote or paraphrase the actual code change; never comment on slice size, file count, or tooling.
+- No checklists, no "consider reviewing", no generic praise. Max 12 comments per slice.
+- severity/priority reflect urgency for the author (blocker = must fix before merge).`;
 
   const user = JSON.stringify({
     model_hint: model,
@@ -81,12 +82,13 @@ Rules:
   });
 
   const parsed = parseJsonFromModel(raw);
-  if (!Array.isArray(parsed.findings)) return [];
+  const items = Array.isArray(parsed.comments) ? parsed.comments : parsed.findings;
+  if (!Array.isArray(items)) return [];
 
   /** @type {Map<string, string>} */
   const patchByPath = new Map(micro.files.map((f) => [f.filename, f.patch ?? ""]));
 
-  return parsed.findings
+  return items
     .slice(0, 12)
     .map((f) => {
       const filename = f.filename ? String(f.filename) : "";
@@ -96,7 +98,9 @@ Rules:
       let baseMessage = String(f.message ?? "").trim();
       if (!baseMessage || !filename || !validateLineInPatch(patch, line)) return null;
 
-      if (suggestion) baseMessage = `${baseMessage}\n\n_Suggestion:_ ${suggestion}`;
+      if (suggestion) {
+        baseMessage = `${baseMessage}\n\n**Suggested change:**\n${suggestion.startsWith("```") ? suggestion : `\`${suggestion}\``}`;
+      }
       const tag = normalizeFindingTag(f.tag);
       const priority = normalizeFindingPriority(f.priority);
 

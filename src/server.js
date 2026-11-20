@@ -73,6 +73,7 @@ function reviewPayload(report) {
     microPrs: report.microPrs,
     microResults: report.microResults,
     composite: report.composite,
+    macroReview: report.macroReview,
     outputMarkdown: report.outputMarkdown,
   };
 }
@@ -218,6 +219,31 @@ app.post("/api/comments/list", async (req, res) => {
     const errStatus = /** @type {{ status?: number }} */ (err)?.status;
     const status = errStatus === 403 ? 403 : 500;
     res.status(status).json(explained);
+  }
+});
+
+app.post("/api/macro-review/post", async (req, res) => {
+  const { prUrl, token, owner, repo, pr, body, event } = req.body ?? {};
+  if (!body?.trim()) {
+    res.status(400).json({ error: "body required" });
+    return;
+  }
+  const reviewEvent = event === "APPROVE" || event === "REQUEST_CHANGES" ? event : "COMMENT";
+  try {
+    const out = await submitGithubApproval({
+      prUrl,
+      owner,
+      repo,
+      pr,
+      token: token ?? process.env.GITHUB_TOKEN,
+      scope: "pr",
+      event: reviewEvent,
+      body: String(body).trim(),
+    });
+    res.json(out);
+  } catch (err) {
+    const explained = explainGithubError(err, { action: "post macro review comment" });
+    res.status(explained.status ?? 500).json({ error: explained.error ?? String(err), hint: explained.hint });
   }
 });
 
