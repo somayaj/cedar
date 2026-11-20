@@ -9,6 +9,7 @@ import { normalizeSliceId } from "./architecture-model.js";
 import { formatPrHubLabel, mermaidFlowNodeLabel } from "./diagram-labels.js";
 import { buildPrArchitectureLayers } from "./pr-architecture-layers.js";
 import { mermaidClassId, mermaidParticipantAlias, mermaidSafeText } from "./mermaid-sanitize.js";
+import { layerAccent } from "./diagram-colors.js";
 
 const MAX_LAYERS = 16;
 
