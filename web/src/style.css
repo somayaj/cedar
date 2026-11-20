@@ -394,10 +394,6 @@
     background: linear-gradient(90deg, rgb(30 58 138 / 0.12) 0%, transparent 45%);
   }
 
-  .cedar-diagram-slice-num {
-    font-weight: 600;
-  }
-
   .cedar-layer-chip-label {
     @apply text-[11px] font-medium text-zinc-100;
   }
@@ -465,19 +461,28 @@
   }
 
   .cedar-diagram-slice-badge {
-    @apply inline-flex cursor-pointer items-center gap-1 rounded-md border border-transparent px-0.5 py-0.5 transition hover:border-white/15 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/30;
+    @apply inline-flex cursor-pointer items-center gap-1 rounded-md border px-1 py-0.5 transition hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/30;
   }
 
-  .cedar-diagram-slice-dot {
-    @apply shrink-0 border border-white/20;
+  .cedar-slice-status-dot {
+    @apply h-2.5 w-2.5 shrink-0 rounded-full border;
+    box-shadow: 0 0 6px color-mix(in srgb, currentColor 35%, transparent);
   }
 
-  .cedar-diagram-slice-num {
-    @apply text-[10px] font-medium text-zinc-500;
+  .cedar-slice-index {
+    @apply text-[10px] font-semibold;
   }
 
-  .cedar-diagram-slice-badge:hover .cedar-diagram-slice-num {
-    @apply text-zinc-300;
+  .cedar-nav-item-row .cedar-slice-index {
+    @apply min-w-[1.25rem] text-center text-[10px];
+  }
+
+  .cedar-slice-review-badge .cedar-slice-status-dot {
+    @apply h-2 w-2;
+  }
+
+  .cedar-file-change-badge {
+    @apply text-[10px] font-medium;
   }
 
   .cedar-layout-view.is-diagram-collapsed .diagram-stage-canvas {
@@ -805,12 +810,12 @@
     @apply flex w-full min-w-0 items-center gap-1.5;
   }
 
-  .cedar-nav-item-index {
-    @apply w-4 shrink-0 text-[10px] font-medium text-zinc-600;
+  .cedar-nav-item .cedar-slice-index {
+    @apply w-4 shrink-0 text-center;
   }
 
-  .cedar-nav-item.is-active .cedar-nav-item-index {
-    @apply text-zinc-400;
+  .cedar-nav-item .cedar-slice-status-dot {
+    @apply h-2 w-2;
   }
 
   .cedar-nav-item-label {
@@ -1020,10 +1025,6 @@
 
   .cedar-gh-open-github:hover {
     text-decoration: underline;
-  }
-
-  .cedar-gh-file-meta {
-    color: #8b949e;
   }
 
   .cedar-gh-file-body {

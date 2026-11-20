@@ -2,7 +2,7 @@ import { cedarMarkSvg } from "./cedar-logo.js";
 import { architectureIconSvg, slicesIconSvg } from "./cedar-icons.js";
 import { mountArchitectureGraphs, wireArchitectureZoomControls } from "./architecture-canvas.js";
 import { buildDiagramGraph } from "../../src/diagram-graph.js";
-import { layerAccent, sliceIndexColor } from "../../src/diagram-colors.js";
+import { layerAccent, sliceStatusVisual } from "../../src/diagram-colors.js";
 import { buildArchitectureDiagramMermaid } from "../../src/architecture-diagram.js";
 import { buildCompleteLayoutViews } from "../../src/architecture-layout-views.js";
 import {
@@ -23,12 +23,37 @@ import {
 import { applyReviewStreamEvent, postReviewStream } from "./review-stream.js";
 import { buildPrChatContext, wirePrChatSidebar } from "./pr-chat.js";
 
-const statusDot = {
-  passed: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]",
-  failed: "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.45)]",
-  skipped: "bg-zinc-600",
-  pending: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.35)]",
-};
+/**
+ * @param {string} [status]
+ */
+function renderSliceStatusDot(status) {
+  const v = sliceStatusVisual(status);
+  return `<span class="cedar-slice-status-dot" style="background-color:${v.fill};border-color:${v.border};color:${v.border}" aria-hidden="true"></span>`;
+}
+
+/**
+ * @param {number} n
+ * @param {string} [status]
+ * @param {boolean} [hashPrefix]
+ */
+function renderSliceIndexLabel(n, status, hashPrefix = true) {
+  const v = sliceStatusVisual(status);
+  const label = hashPrefix ? `#${n}` : String(n);
+  return `<span class="cedar-slice-index tabular-nums" style="color:${v.text}">${label}</span>`;
+}
+
+/**
+ * Review status pill on each virtual micro-PR (matches diagram slice badges).
+ * @param {string} [status]
+ */
+function renderSliceReviewBadge(status) {
+  const v = sliceStatusVisual(status);
+  const label = statusLabel[status] ?? status ?? "Pending";
+  return `<span class="cedar-badge cedar-slice-review-badge inline-flex items-center gap-1.5" style="border-color:${v.border}66;background-color:${v.fill};color:${v.text}">
+    ${renderSliceStatusDot(status)}
+    <span>${escapeHtml(label)}</span>
+  </span>`;
+}
 
 const statusLabel = {
   passed: "Ready",
@@ -282,16 +307,17 @@ function renderDiagramSliceBadges(slices) {
   if (!slices.length) return "";
   const dots = slices
     .map((r) => {
-      const dot = statusDot[r.status] ?? statusDot.pending;
+      const v = sliceStatusVisual(r.status);
       const n = r.sliceNumber ?? 0;
       const classes = (r.classNames ?? []).filter(Boolean);
       const classHint = classes.length ? classes.join(", ") : String(r.componentName ?? r.componentId ?? "").trim();
       const title = classHint ? `${classHint} · slice #${n}` : `slice #${n}`;
       return `<button type="button" class="cedar-diagram-slice-badge" data-jump-slice="${escapeHtml(r.componentId)}"
+        style="border-color:${v.border}44"
         title="${escapeHtml(title)}"
         aria-label="Slice ${n}: ${escapeHtml(classHint || r.componentId)}">
-        <span class="cedar-diagram-slice-dot h-2.5 w-2.5 rounded-full ${dot}" aria-hidden="true"></span>
-        <span class="cedar-diagram-slice-num tabular-nums" style="color:${sliceIndexColor(n)}">#${n}</span>
+        ${renderSliceStatusDot(r.status)}
+        ${renderSliceIndexLabel(n, r.status)}
       </button>`;
     })
     .join("");
@@ -797,8 +823,8 @@ function renderResults(container, data) {
           class="cedar-nav-item cedar-nav-item-stack${i === 0 ? " is-active" : ""}"
           title="${escapeHtml(r.componentName)}">
           <span class="cedar-nav-item-row">
-            <span class="cedar-nav-item-index tabular-nums">${i + 1}</span>
-            <span class="h-1.5 w-1.5 shrink-0 rounded-full ${statusDot[r.status] ?? statusDot.skipped}"></span>
+            ${renderSliceIndexLabel(i + 1, r.status, false)}
+            ${renderSliceStatusDot(r.status)}
             <span class="cedar-nav-item-label">${escapeHtml(r.componentName)}</span>
             ${approved ? '<span class="cedar-nav-item-check">✓</span>' : ""}
           </span>
@@ -914,8 +940,8 @@ function renderResults(container, data) {
       return `<button type="button" role="tab" class="cedar-nav-item cedar-slice-tab${active ? " is-active" : ""}"
         data-slice-tab="${escapeHtml(r.componentId)}" aria-selected="${active ? "true" : "false"}"
         title="${escapeHtml(r.componentName)}">
-        <span class="cedar-nav-item-index tabular-nums">${i + 1}</span>
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full ${statusDot[r.status] ?? statusDot.skipped}"></span>
+        ${renderSliceIndexLabel(i + 1, r.status, false)}
+        ${renderSliceStatusDot(r.status)}
         <span class="cedar-nav-item-label">${escapeHtml(r.componentName)}</span>
         ${approved ? '<span class="cedar-nav-item-check">✓</span>' : ""}
       </button>`;
@@ -959,7 +985,7 @@ function renderResults(container, data) {
               <h3 class="mt-2 text-sm font-semibold text-white">${escapeHtml(r.componentName)}</h3>
               <p class="mt-1 font-mono text-xs text-zinc-500">${escapeHtml(vpr.slug)}</p>
               <div class="mt-4 flex flex-wrap gap-2">
-                <span class="cedar-badge cedar-badge-muted">${statusLabel[r.status] ?? r.status}</span>
+                ${renderSliceReviewBadge(r.status)}
                 <span class="cedar-badge cedar-badge-muted">+${micro?.additions ?? 0} / −${micro?.deletions ?? 0}</span>
                 <span class="cedar-badge cedar-badge-muted">${fileList.length} files</span>
                 ${blockers ? `<span class="cedar-badge border-rose-500/30 bg-rose-500/10 text-rose-200">${blockers} blockers</span>` : ""}

@@ -93,6 +93,26 @@ function statusLabel(status) {
   return labels[s] ?? "Modified";
 }
 
+const FILE_CHANGE_BADGE = {
+  added: { fill: "#14532d", border: "#34d399", text: "#d1fae5" },
+  removed: { fill: "#450a0a", border: "#f87171", text: "#fecaca" },
+  deleted: { fill: "#450a0a", border: "#f87171", text: "#fecaca" },
+  renamed: { fill: "#312e81", border: "#818cf8", text: "#e0e7ff" },
+  copied: { fill: "#134e4a", stroke: "#2dd4bf", text: "#ccfbf1", border: "#2dd4bf" },
+  changed: { fill: "#1e3a8a", border: "#60a5fa", text: "#dbeafe" },
+  modified: { fill: "#422006", border: "#fbbf24", text: "#fef3c7" },
+};
+
+/**
+ * @param {string} status
+ */
+function renderFileChangeBadge(status) {
+  const key = String(status ?? "modified").toLowerCase();
+  const c = FILE_CHANGE_BADGE[key] ?? FILE_CHANGE_BADGE.modified;
+  const border = c.border ?? c.stroke;
+  return `<span class="cedar-badge cedar-file-change-badge" style="border-color:${border}55;background-color:${c.fill};color:${c.text}">${escapeHtml(statusLabel(key))}</span>`;
+}
+
 /**
  * @param {{ path: string, status?: string, additions: number, deletions: number, patch?: string | null }[]} files
  * @param {string} pullUrl
@@ -126,7 +146,7 @@ export function renderSliceFileReviews(files, pullUrl = "") {
               ? `<a href="${escapeHtml(ghFile)}" target="_blank" rel="noreferrer" class="cedar-gh-open-github">Open on GitHub</a>`
               : ""
           }
-          <span class="cedar-gh-file-meta">${escapeHtml(statusLabel(status))}</span>
+          ${renderFileChangeBadge(status)}
         </div>
         <div class="cedar-gh-file-body" data-file-body id="file-review-${i}">
           ${diffHtml || `<p class="cedar-gh-diff-empty">No patch returned for this file.</p>`}

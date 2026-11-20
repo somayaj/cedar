@@ -48,3 +48,12 @@ export function sliceIndexColor(index1) {
   const i = Math.max(1, index1) - 1;
   return SLICE_INDEX_COLORS[i % SLICE_INDEX_COLORS.length];
 }
+
+/**
+ * @param {string} [status]
+ */
+export function sliceStatusVisual(status) {
+  const key =
+    status && Object.prototype.hasOwnProperty.call(REVIEW_STATUS_COLORS, status) ? status : "pending";
+  return REVIEW_STATUS_COLORS[key];
+}
