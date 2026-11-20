@@ -89,3 +89,23 @@ async function cursorChatOneShot(opts) {
 
   throw lastError ?? new Error("Cursor chat failed");
 }
+
+/**
+ * Composer slice review — bridge plan mode or direct API only (no bridge→Agent fallback).
+ *
+ * @param {Parameters<typeof cursorChat>[0]} opts
+ */
+export async function composerReviewChat(opts) {
+  const apiKey = cursorApiKey();
+  if (!apiKey) throw new Error("CURSOR_API_KEY is not set");
+
+  if (process.env.CEDAR_CURSOR_BRIDGE !== "false") {
+    return cursorBridgeChat({
+      ...opts,
+      json: true,
+      mode: "plan",
+    });
+  }
+
+  return cursorChatOneShot({ ...opts, json: true });
+}

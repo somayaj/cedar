@@ -173,9 +173,9 @@ app.post("/api/review/stream", async (req, res) => {
 
 app.post("/api/pr-chat", async (req, res) => {
   const { messages, context } = req.body ?? {};
-  if (!hasAiProvider()) {
+  if (!cursorApiKey()) {
     res.status(503).json({
-      error: "Set CURSOR_API_KEY or OPENROUTER_API_KEY on the server",
+      error: "Set CURSOR_API_KEY (Composer) on the server and CEDAR_AI_PROVIDER=cursor",
       provider: null,
     });
     return;

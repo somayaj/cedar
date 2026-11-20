@@ -10,15 +10,17 @@ export function findingKey(componentId, f, index) {
   return `${componentId}::${f.ruleId ?? "finding"}::${f.filename ?? ""}::${index}`;
 }
 
+import { isCodeReviewFinding } from "../../src/finding-meta.js";
+
 /**
  * @param {string} componentId
- * @param {{ findings?: Array<unknown> }} microResult
+ * @param {{ findings?: Array<unknown>, reviewComments?: Array<unknown> }} microResult
  * @param {{ githubFindingsBySlice?: Record<string, Array<unknown>> } | undefined} session
  */
 export function findingsForSlice(componentId, microResult, session) {
-  const base = /** @type {Array<unknown>} */ (microResult.findings ?? []);
+  const comments = Array.isArray(microResult.reviewComments) ? microResult.reviewComments : [];
   const extra = session?.githubFindingsBySlice?.[componentId] ?? [];
-  return [...base, ...extra];
+  return [...comments, ...extra].filter(isCodeReviewFinding);
 }
 
 /**

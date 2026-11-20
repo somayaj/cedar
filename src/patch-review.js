@@ -45,6 +45,19 @@ export function firstAddedLineMatching(patch, re) {
  * @param {string} text
  * @param {number} [max = 120]
  */
+/**
+ * @param {string} patch
+ * @param {number} line
+ */
+export function validateLineInPatch(patch, line) {
+  if (!patch?.trim() || !Number.isFinite(line) || line < 1) return false;
+  for (const row of walkPatchLines(patch)) {
+    if (row.kind === "add" && row.line === line) return true;
+    if ((row.kind === "add" || row.kind === "context") && row.line === line) return true;
+  }
+  return false;
+}
+
 export function clipCodeExcerpt(text, max = 120) {
   const t = text.replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;

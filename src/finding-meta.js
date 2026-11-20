@@ -66,8 +66,8 @@ export function getFindingMeta(ruleId, severity = "info") {
   if (exact) {
     tag = exact.tag;
     if (exact.priority) priority = exact.priority;
-  } else if (id.startsWith("ai/")) {
-    tag = "ai";
+  } else if (id.startsWith("ai/") || id.startsWith("composer/")) {
+    tag = id.startsWith("composer/") ? "ai" : "ai";
     priority = severity === "blocker" ? "P1" : severity === "warning" ? "P2" : "P3";
   } else if (id.startsWith("github/")) {
     tag = "github";
@@ -133,6 +133,19 @@ export function normalizeFindingTag(value) {
   if (s.includes("arch")) return "architecture";
   if (s.includes("bound")) return "boundary";
   return undefined;
+}
+
+/**
+ * Draft inline review comments only — Composer-generated or existing GitHub comments (no heuristic fallback).
+ *
+ * @param {{ ruleId?: string, filename?: string, line?: number, source?: string }} f
+ */
+export function isCodeReviewFinding(f) {
+  if (!f?.filename) return false;
+  if (typeof f.line !== "number" || f.line < 1) return false;
+  if (f.source === "github") return true;
+  if (f.source === "composer" || String(f.ruleId ?? "").startsWith("composer/")) return true;
+  return false;
 }
 
 /** @type {Record<FindingTag, string>} */

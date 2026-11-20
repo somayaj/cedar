@@ -1208,7 +1208,7 @@ function renderResults(container, data) {
         </div>
         <div class="cedar-review-rail-card cedar-pr-chat-card">
           <p class="cedar-rail-label">Ask about this PR</p>
-          <p class="cedar-pr-chat-hint mt-1 text-[9px] leading-snug text-zinc-600">Same Cursor key · bridge in ask mode</p>
+          <p class="cedar-pr-chat-hint mt-1 text-[9px] leading-snug text-zinc-600">Composer · ask mode · answers from review context</p>
           <div class="cedar-pr-chat-log mt-2" id="cedar-pr-chat-log" aria-live="polite" aria-relevant="additions"></div>
           <form class="cedar-pr-chat-form mt-2">
             <label class="sr-only" for="cedar-pr-chat-input">Question about this pull request</label>

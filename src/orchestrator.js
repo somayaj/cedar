@@ -421,7 +421,7 @@ async function runMicroReviewPass(ordered, ctx) {
           architectureSummary: ctx.breakoutPlan?.architectureSummary,
         });
         if (aiFindings.length) {
-          result = mergeMicroReviewFindings(result, micro, aiFindings);
+          result = { ...result, reviewComments: aiFindings };
         }
       } catch (err) {
         if (isAiAuthError(err)) {

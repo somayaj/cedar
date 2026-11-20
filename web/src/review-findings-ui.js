@@ -44,12 +44,15 @@ export function buildFindingsListHtml(sliceResult, session) {
 
   if (sliceFindings.length === 0) {
     return {
-      html: `<p class="text-sm italic text-zinc-600">No findings yet — run review or reload GitHub comments.</p>`,
+      html: `<p class="text-xs leading-relaxed text-zinc-500">
+        No Composer review comments for this slice yet. Re-run <strong class="font-medium text-zinc-400">Start review</strong> with <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> (Composer). Comments are not posted until you choose <strong class="font-medium text-zinc-400">Save as comment</strong>; use <strong class="font-medium text-zinc-400">Ignore</strong> to dismiss locally. Existing GitHub inline comments load from the diff when available.
+      </p>`,
       activeCount: 0,
     };
   }
 
-  const html = `<ul class="cedar-findings-list space-y-2">${sliceFindings
+  const html = `<p class="mb-2 text-[10px] leading-snug text-zinc-600">Composer draft comments on changed lines — not on GitHub until <strong class="font-medium text-zinc-400">Save as comment</strong>.</p>
+    <ul class="cedar-findings-list space-y-2">${sliceFindings
     .slice(0, 24)
     .map((f, fi) => {
       const key = findingKey(r.componentId, f, fi);

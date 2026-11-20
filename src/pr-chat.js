@@ -1,6 +1,9 @@
-import { aiChat, activeAiProvider, hasAiProvider } from "./ai-chat.js";
+import { activeAiProvider } from "./ai-chat.js";
 import { cursorApiKey } from "./ai-credentials.js";
 import { cursorBridgeChat } from "./cursor-bridge-client.js";
+import { cursorChat } from "./cursor-llm.js";
+import { resolveCursorModel } from "./default-model.js";
+import { isCodeReviewFinding } from "./finding-meta.js";
 import { prChatContextFromReport } from "./pr-chat-context.js";
 
 export { prChatContextFromReport };
@@ -15,7 +18,8 @@ export function buildPrChatSystemPrompt(context) {
   const block = trimContextBlock(JSON.stringify(context, null, 0));
   return [
     "You help reviewers understand a GitHub pull request that Cedar already partitioned and reviewed.",
-    "Answer only from the REVIEW CONTEXT below. If the context lacks an answer, say what is missing.",
+    "Answer only from the REVIEW CONTEXT below (slices, codeReviewComments with file:line).",
+    "When discussing review items, cite file paths and line numbers from codeReviewComments.",
     "Be concise (markdown OK). Do not invent files, slices, or findings not in context.",
     "Do not edit the repo or run commands.",
     "",
@@ -29,8 +33,11 @@ export function buildPrChatSystemPrompt(context) {
  * @param {object} context
  */
 export async function answerPrChatQuestion(messages, context) {
-  if (!hasAiProvider()) {
-    throw new Error("Set CURSOR_API_KEY (Composer) or OPENROUTER_API_KEY on the server");
+  if (!cursorApiKey()) {
+    throw new Error("Set CURSOR_API_KEY (Composer) on the server and CEDAR_AI_PROVIDER=cursor");
+  }
+  if (activeAiProvider() !== "cursor") {
+    throw new Error("PR chat uses Composer only — set CEDAR_AI_PROVIDER=cursor and unset OPENROUTER_API_KEY");
   }
 
   const trimmed = messages
@@ -47,25 +54,31 @@ export async function answerPrChatQuestion(messages, context) {
   }
 
   const system = buildPrChatSystemPrompt(context);
+  const model = resolveCursorModel();
   const payload = {
     messages: [{ role: "system", content: system }, ...trimmed],
-    maxTokens: 1400,
+    model,
   };
 
-  if (cursorApiKey() && process.env.CEDAR_CURSOR_BRIDGE !== "false") {
-    return await cursorBridgeChat({ ...payload, mode: "ask" });
+  if (process.env.CEDAR_CURSOR_BRIDGE !== "false") {
+    try {
+      return await cursorBridgeChat({ ...payload, mode: "ask" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("[cedar] PR chat bridge failed, falling back to Composer API:", message);
+    }
   }
 
-  return await aiChat(payload);
+  return await cursorChat(payload);
 }
 
 export function prChatProviderLabel() {
-  const p = activeAiProvider();
-  if (p === "cursor") {
-    return process.env.CEDAR_CURSOR_BRIDGE === "false" ? "Cursor API" : "Cursor bridge · ask";
+  if (!cursorApiKey()) return null;
+  const model = resolveCursorModel();
+  if (process.env.CEDAR_CURSOR_BRIDGE === "false") {
+    return `Composer · ${model}`;
   }
-  if (p === "openrouter") return "OpenRouter";
-  return null;
+  return `Composer · ${model} · ask`;
 }
 
 /**

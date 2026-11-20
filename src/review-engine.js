@@ -4,7 +4,6 @@ import { enrichFinding } from "./finding-meta.js";
 import {
   firstAddedLineMatching,
   reviewAddedLinesInPatch,
-  reviewChangeSummary,
   withCodeAnchor,
 } from "./patch-review.js";
 
@@ -61,6 +60,7 @@ const SKIP_PATH_FRAGMENTS = [
  * @property {string} summaryMarkdown
  * @property {number} filesReviewed
  * @property {number} hunksReviewed
+ * @property {Finding[]} [reviewComments] Composer line-anchored comments (UI only; heuristics stay in findings)
  */
 
 /**
@@ -223,29 +223,7 @@ export function reviewMicroPr(micro, ctx = {}) {
     }
   }
 
-  ensureFileReviewFindings(micro, findings, note);
   return finalizeMicroReview(micro, findings, hunksReviewed);
-}
-
-/**
- * @param {import('./partition.js').MicroPr} micro
- * @param {Finding[]} findings
- * @param {(raw: Finding) => void} note
- */
-function ensureFileReviewFindings(micro, findings, note) {
-  const substantive = findings.filter((f) => f.ruleId !== "skip-generated" && f.ruleId !== "review/change-review");
-  if (substantive.length > 0) return;
-
-  const candidates = [...micro.files]
-    .filter((f) => !SKIP_PATH_FRAGMENTS.some((s) => f.filename.includes(s)))
-    .sort((a, b) => b.additions + b.deletions - (a.additions + a.deletions))
-    .slice(0, 2);
-
-  for (const file of candidates) {
-    if ((file.patch ?? "").trim()) {
-      reviewChangeSummary(file.filename, file.patch ?? "", note);
-    }
-  }
 }
 
 /**

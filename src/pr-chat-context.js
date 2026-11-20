@@ -1,3 +1,5 @@
+import { isCodeReviewFinding } from "./finding-meta.js";
+
 /**
  * Browser-safe PR chat context (no Node / Cursor SDK imports).
  * @param {object} report
@@ -8,15 +10,21 @@ export function prChatContextFromReport(report) {
     .filter((r) => r.status !== "skipped")
     .map((r) => {
       const micro = microPrs?.find((m) => m.componentId === r.componentId);
+      const codeFindings = (r.reviewComments ?? []).filter(isCodeReviewFinding).slice(0, 12);
       return {
         id: r.componentId,
         name: micro?.componentName ?? r.componentName,
         status: r.status,
         files: micro?.fileCount ?? micro?.files?.length ?? 0,
-        findings: (r.findings ?? []).slice(0, 5).map((f) => ({
+        codeReviewComments: codeFindings.map((f) => ({
           severity: f.severity,
-          message: String(f.message ?? "").slice(0, 240),
+          priority: f.priority,
+          tag: f.tag,
+          ruleId: f.ruleId,
           file: f.filename,
+          line: f.line,
+          message: String(f.message ?? "").slice(0, 400),
+          source: f.source ?? "heuristic",
         })),
       };
     });
