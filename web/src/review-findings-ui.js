@@ -55,7 +55,7 @@ function renderCommentCard(f, r, fi, posted) {
       ${lineChip}
       ${jumpBtn}
       ${ignored ? '<span class="cedar-badge cedar-badge-muted">Dismissed</span>' : ""}
-      ${onGithub && !fromGithub ? '<span class="cedar-badge cedar-badge-ok">Posted</span>' : ""}
+      ${onGithub && f.source !== "github" ? '<span class="cedar-badge cedar-badge-ok">Posted</span>' : ""}
     </div>
     <div class="cedar-finding-actions mt-2 flex flex-wrap gap-1.5">
       ${
@@ -81,6 +81,44 @@ function renderCommentCard(f, r, fi, posted) {
 }
 
 /**
+ * @param {{ componentId: string, componentName: string, status?: string, filesReviewed?: number, reviewComments?: unknown[], cursorReview?: { status?: string, count?: number, error?: string } }} sliceResult
+ * @param {{ data?: { cursorReviewSummary?: { enabled?: boolean } }, findingCommentsPosted?: Set<string> } | undefined} session
+ */
+function sliceCursorEmptyMessage(r, session) {
+  const health = typeof window !== "undefined" ? window.__cedarServerHealth : null;
+  const summary = session?.data?.cursorReviewSummary;
+  const cursorConfigured = Boolean(health?.hasCursor && health?.sliceReviewProvider === "cursor");
+  const cr = r.cursorReview;
+  const rawComments = Array.isArray(r.reviewComments) ? r.reviewComments.length : 0;
+
+  if (r.status === "skipped" || (r.filesReviewed ?? 0) === 0) {
+    return "No changed files in this slice — Cursor line comments are not generated here.";
+  }
+
+  if (cr?.status === "error" || cr?.status === "stopped") {
+    const err = cr.error ? ` <span class="text-rose-400/90">${escapeHtml(cr.error)}</span>` : "";
+    return `Cursor ran on this slice but the Composer call did not finish.${err} Check the review progress log (bridge/API) and run <strong class="font-medium text-zinc-400">Start review</strong> again.`;
+  }
+
+  if (cr && (cr.status === "empty" || cr.count === 0) && rawComments === 0) {
+    return `Cursor reviewed this slice and returned <strong class="font-medium text-zinc-400">no line comments</strong> (nothing to flag on changed <code class="font-mono text-[10px] text-zinc-500">+</code> lines). Heuristic signals may still show elsewhere on the slice.`;
+  }
+
+  if (rawComments > 0) {
+    return `Composer returned ${rawComments} comment(s) but none could be anchored to this diff (filename/line mismatch). Re-run <strong class="font-medium text-zinc-400">Start review</strong> or check server logs.`;
+  }
+
+  if (summary?.enabled || cursorConfigured) {
+    if (!cr) {
+      return `This review has no Cursor slice pass for this component — run <strong class="font-medium text-zinc-400">Start review</strong> again after restarting <span class="font-mono text-zinc-600">npm run dev:api</span> (your API key is already loaded).`;
+    }
+    return `No Cursor draft comments for this slice. GitHub inline comments, if any, stay on the diff only.`;
+  }
+
+  return `Cursor slice review did not run (no <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> on the API or <span class="font-mono text-zinc-600">CEDAR_AI_SLICE_REVIEW=false</span>). Add the key to <span class="font-mono text-zinc-600">.env</span> and run <strong class="font-medium text-zinc-400">Start review</strong>.`;
+}
+
+/**
  * @param {{ componentId: string, componentName: string, findings?: Array<unknown> }} sliceResult
  * @param {{ githubFindingsBySlice?: Record<string, unknown[]>, findingCommentsPosted?: Set<string> } | undefined} session
  */
@@ -92,9 +130,7 @@ export function buildFindingsListHtml(sliceResult, session) {
 
   if (sliceFindings.length === 0) {
     return {
-      html: `<p class="text-xs leading-relaxed text-zinc-500">
-        No <strong class="font-medium text-zinc-400">Cursor</strong> findings on this slice yet. Set <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> and <span class="font-mono text-zinc-600">CEDAR_AI_PROVIDER=cursor</span>, then <strong class="font-medium text-zinc-400">Start review</strong>. Draft comments appear here by file; GitHub inline comments stay on the diff.
-      </p>`,
+      html: `<p class="text-xs leading-relaxed text-zinc-500">${sliceCursorEmptyMessage(r, session)}</p>`,
       activeCount: 0,
     };
   }

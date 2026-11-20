@@ -184,6 +184,7 @@ async function refreshHealth() {
   try {
     const res = await fetch("/api/health");
     const data = await res.json();
+    window.__cedarServerHealth = data;
     initDiffFontFromServer(data.diffFont);
     if (data.hasToken && data.aiProvider === "cursor") {
       pill.textContent = "Cursor ready";
