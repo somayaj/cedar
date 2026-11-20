@@ -784,17 +784,19 @@
   }
 
   @media (min-width: 1024px) {
-    .cedar-review-layout.cedar-review-slices-focus .cedar-review-sidebar,
-    .cedar-review-layout.cedar-review-slices-focus > .cedar-review-splitter {
+  /* Slices tab: maximize diff space but keep PR chat in the left rail */
+    .cedar-review-layout.cedar-review-slices-focus:not(.cedar-pipeline-rail-expanded)
+      .cedar-review-sidebar
+      > *:not(.cedar-pr-chat-card) {
       display: none;
     }
 
-    .cedar-review-layout.cedar-review-slices-focus.cedar-pipeline-rail-expanded .cedar-review-sidebar {
-      display: block;
+    .cedar-review-layout.cedar-review-slices-focus:not(.cedar-pipeline-rail-expanded) .cedar-review-sidebar {
+      @apply flex min-h-0 flex-col;
     }
 
-    .cedar-review-layout.cedar-review-slices-focus.cedar-pipeline-rail-expanded > .cedar-review-splitter {
-      display: block;
+    .cedar-review-layout.cedar-review-slices-focus:not(.cedar-pipeline-rail-expanded) .cedar-pr-chat-card {
+      @apply flex-1;
     }
 
     .cedar-slices-shell.cedar-slice-rail-collapsed .cedar-slice-rail-wrap,
