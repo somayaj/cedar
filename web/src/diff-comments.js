@@ -582,7 +582,13 @@ export async function loadDiffReviewComments(root) {
       throw new Error(msg || "Could not load comments");
     }
     session.reviewComments = json.comments ?? [];
+    const { groupGithubCommentFindings } = await import("./github-findings.js");
+    session.githubFindingsBySlice = groupGithubCommentFindings(
+      session.reviewComments,
+      session.data?.microPrs ?? []
+    );
     repaintAllDiffComments(root);
+    window.__cedarRefreshReviewUi?.();
   } catch (err) {
     showCommentToast(err instanceof Error ? err.message : String(err), "error");
   }

@@ -26,10 +26,12 @@ import {
   countActiveFindings,
   ensureFindingSession,
   findingKey,
+  findingsForSlice,
   isFindingIgnored,
   setFindingToast,
   wireFindingActions,
 } from "./finding-actions.js";
+import { FINDING_TAG_CLASS, getFindingMeta } from "../../src/finding-meta.js";
 
 /**
  * @param {string} [status]
@@ -301,9 +303,12 @@ function refreshReviewUi() {
   renderResults(results, session.data);
 }
 
+window.__cedarRefreshReviewUi = refreshReviewUi;
+
 function mergeConfidence(gate, microResults) {
-  const blockers = countActiveFindings(microResults, "blocker");
-  const warnings = countActiveFindings(microResults, "warning");
+  const session = window.__cedarSession;
+  const blockers = countActiveFindings(microResults, "blocker", session);
+  const warnings = countActiveFindings(microResults, "warning", session);
   if (blockers > 0) return { score: 1, label: "High risk", color: "text-rose-400" };
   if (!gate.ready) return { score: 2, label: "In progress", color: "text-amber-300" };
   if (warnings > 3) return { score: 3, label: "Review carefully", color: "text-amber-200" };
@@ -315,6 +320,19 @@ function severityClass(sev) {
   if (sev === "blocker") return "severity-blocker";
   if (sev === "warning") return "severity-warning";
   return "severity-info";
+}
+
+/**
+ * @param {{ ruleId?: string, severity?: string, tag?: string, priority?: string }} f
+ */
+function renderFindingTaxonomy(f) {
+  const meta = getFindingMeta(f.ruleId, f.severity);
+  const tag = f.tag ?? meta.tag;
+  const tagLabel = meta.tagLabel;
+  const priority = f.priority ?? meta.priority;
+  const tagClass = FINDING_TAG_CLASS[tag] ?? "cedar-finding-tag-quality";
+  return `<span class="cedar-finding-priority" title="Priority">${priority}</span>
+    <span class="cedar-finding-tag ${tagClass}" title="Category">${escapeHtml(tagLabel)}</span>`;
 }
 
 function cyToolbar(targetId, badge = "") {
@@ -980,7 +998,8 @@ function renderResults(container, data) {
     .map((r, i) => {
       const micro = microPrs.find((m) => m.componentId === r.componentId);
       const rationale = micro?.rationale ?? micro?.description;
-      const activeFindings = r.findings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
+      const sliceFindings = findingsForSlice(r.componentId, r, window.__cedarSession);
+      const activeFindings = sliceFindings.filter((f, fi) => !isFindingIgnored(findingKey(r.componentId, f, fi)));
       const blockers = activeFindings.filter((f) => f.severity === "blocker").length;
       const warnings = activeFindings.filter((f) => f.severity === "warning").length;
       const approved = sliceApprovals.has(r.componentId);
@@ -989,20 +1008,24 @@ function renderResults(container, data) {
       const posted = window.__cedarSession?.findingCommentsPosted ?? new Set();
 
       const findings =
-        r.findings.length === 0
-          ? `<p class="text-sm italic text-zinc-600">Clean virtual PR — no findings.</p>`
-          : `<ul class="cedar-findings-list space-y-2">${r.findings
-              .slice(0, 20)
+        sliceFindings.length === 0
+          ? `<p class="text-sm italic text-zinc-600">No findings yet — run review or reload GitHub comments.</p>`
+          : `<ul class="cedar-findings-list space-y-2">${sliceFindings
+              .slice(0, 24)
               .map((f, fi) => {
                 const key = findingKey(r.componentId, f, fi);
                 const ignored = isFindingIgnored(key);
-                const onGithub = posted.has(key);
+                const onGithub = posted.has(key) || f.source === "github";
                 const fileBtn = f.filename
                   ? `<button type="button" class="cedar-finding-file cedar-btn-link text-[11px]" data-finding-jump data-filename="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</button>`
                   : "";
+                const meta = getFindingMeta(f.ruleId, f.severity);
+                const tag = f.tag ?? meta.tag;
+                const priority = f.priority ?? meta.priority;
                 return `<li class="cedar-finding-card cedar-glass-subtle px-4 py-3${ignored ? " is-ignored" : ""}" data-finding-key="${escapeHtml(key)}">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="${severityClass(f.severity)}">${f.severity}</span>
+                  ${renderFindingTaxonomy(f)}
                   ${fileBtn}
                   ${ignored ? '<span class="cedar-badge cedar-badge-muted">Ignored</span>' : ""}
                   ${onGithub ? '<span class="cedar-badge cedar-badge-ok">On GitHub</span>' : ""}
@@ -1020,10 +1043,12 @@ function renderResults(container, data) {
                     data-finding-severity="${escapeHtml(f.severity)}"
                     data-finding-rule="${escapeHtml(f.ruleId ?? "finding")}"
                     data-finding-message="${escapeHtml(f.message)}"
+                    data-finding-tag="${escapeHtml(tag)}"
+                    data-finding-priority="${escapeHtml(priority)}"
                     data-component-id="${escapeHtml(r.componentId)}"
                     data-component-name="${escapeHtml(r.componentName)}"
                     ${!f.filename || onGithub ? "disabled" : ""}
-                    title="${f.filename ? "Post as inline review comment on GitHub" : "No file path for this finding"}">${onGithub ? "Comment posted" : "Save as comment"}</button>
+                    title="${!f.filename ? "No file path for this finding" : onGithub ? "Already on GitHub" : "Post as inline review comment on GitHub"}">${onGithub ? "On GitHub" : "Save as comment"}</button>
                 </div>
               </li>`;
               })

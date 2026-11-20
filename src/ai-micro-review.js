@@ -1,4 +1,5 @@
 import { aiChat, parseJsonFromModel } from "./ai-chat.js";
+import { enrichFinding } from "./finding-meta.js";
 import { splitPatchIntoHunks } from "./partition.js";
 
 /**
@@ -55,12 +56,14 @@ Max 8 findings. Focus on bugs, security, missing tests, and boundary violations.
 
   return parsed.findings
     .slice(0, 8)
-    .map((f) => ({
-      ruleId: `ai/${String(f.ruleId ?? "review").replace(/\s+/g, "-")}`,
-      severity: normalizeSeverity(f.severity),
-      message: String(f.message ?? "Review note"),
-      filename: f.filename ? String(f.filename) : undefined,
-    }))
+    .map((f) =>
+      enrichFinding({
+        ruleId: `ai/${String(f.ruleId ?? "review").replace(/\s+/g, "-")}`,
+        severity: normalizeSeverity(f.severity),
+        message: String(f.message ?? "Review note"),
+        filename: f.filename ? String(f.filename) : undefined,
+      })
+    )
     .filter((f) => f.message);
 }
 

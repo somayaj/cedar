@@ -1402,6 +1402,46 @@
     @apply inline-flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-xs transition hover:border-white/10 hover:bg-white/5;
   }
 
+  .cedar-finding-priority {
+    @apply inline-flex min-w-[2rem] items-center justify-center rounded border border-zinc-600/60 bg-zinc-800/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-tight text-zinc-300;
+  }
+
+  .cedar-finding-tag {
+    @apply inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide;
+  }
+
+  .cedar-finding-tag-security {
+    @apply border-rose-500/35 bg-rose-500/15 text-rose-100;
+  }
+
+  .cedar-finding-tag-boundary {
+    @apply border-amber-500/35 bg-amber-500/15 text-amber-100;
+  }
+
+  .cedar-finding-tag-architecture {
+    @apply border-violet-500/35 bg-violet-500/15 text-violet-100;
+  }
+
+  .cedar-finding-tag-quality {
+    @apply border-sky-500/35 bg-sky-500/15 text-sky-100;
+  }
+
+  .cedar-finding-tag-hygiene {
+    @apply border-zinc-500/40 bg-zinc-700/40 text-zinc-200;
+  }
+
+  .cedar-finding-tag-review {
+    @apply border-emerald-500/35 bg-emerald-500/15 text-emerald-100;
+  }
+
+  .cedar-finding-tag-ai {
+    @apply border-fuchsia-500/35 bg-fuchsia-500/15 text-fuchsia-100;
+  }
+
+  .cedar-finding-tag-github {
+    @apply border-slate-400/35 bg-slate-500/20 text-slate-100;
+  }
+
   .cedar-finding-card.is-ignored .cedar-finding-message {
     @apply text-zinc-500 line-through decoration-zinc-600;
   }

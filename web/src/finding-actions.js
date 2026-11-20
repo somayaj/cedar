@@ -4,7 +4,21 @@
  * @param {number} index
  */
 export function findingKey(componentId, f, index) {
+  if (f.githubCommentId != null) {
+    return `${componentId}::github/review-comment::${f.filename ?? ""}::gh-${f.githubCommentId}`;
+  }
   return `${componentId}::${f.ruleId ?? "finding"}::${f.filename ?? ""}::${index}`;
+}
+
+/**
+ * @param {string} componentId
+ * @param {{ findings?: Array<unknown> }} microResult
+ * @param {{ githubFindingsBySlice?: Record<string, Array<unknown>> } | undefined} session
+ */
+export function findingsForSlice(componentId, microResult, session) {
+  const base = /** @type {Array<unknown>} */ (microResult.findings ?? []);
+  const extra = session?.githubFindingsBySlice?.[componentId] ?? [];
+  return [...base, ...extra];
 }
 
 /**
@@ -47,10 +61,11 @@ export function firstAddedLineInPatch(patch) {
  * @param {Array<{ componentId: string, findings: Array<{ severity: string, ruleId?: string, filename?: string }> }>} microResults
  * @param {string} severity
  */
-export function countActiveFindings(microResults, severity) {
+export function countActiveFindings(microResults, severity, session) {
   let n = 0;
   for (const r of microResults) {
-    r.findings.forEach((f, i) => {
+    const list = findingsForSlice(r.componentId, r, session);
+    list.forEach((f, i) => {
       const key = findingKey(r.componentId, f, i);
       if (isFindingIgnored(key)) return;
       if (f.severity === severity) n += 1;
@@ -146,7 +161,11 @@ async function postFindingAsComment(btn, refreshUi) {
   }
 
   const line = firstAddedLineInPatch(patch);
-  const body = `**Cedar · ${severity}** (\`${ruleId}\`)\n\n${message}`;
+  const tag = btn.getAttribute("data-finding-tag") ?? "";
+  const priority = btn.getAttribute("data-finding-priority") ?? "";
+  const tagLine = tag ? `\n**Tag:** ${tag}` : "";
+  const priorityLine = priority ? ` · **${priority}**` : "";
+  const body = `**Cedar · ${severity}**${priorityLine} (\`${ruleId}\`)${tagLine}\n\n${message}`;
 
   btn.disabled = true;
   const prev = btn.textContent;

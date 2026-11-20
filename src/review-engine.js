@@ -1,11 +1,23 @@
 import { splitPatchIntoHunks } from "./partition.js";
 import { ARCHITECTURE_MODEL_LABEL, SOLID_REVIEW_CHECKLIST } from "./architecture-model.js";
+import { enrichFinding } from "./finding-meta.js";
 
 const SECRET_PATTERNS = [
   /AKIA[0-9A-Z]{16}/,
   /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /ghp_[a-zA-Z0-9]{20,}/,
   /xox[baprs]-[a-zA-Z0-9-]+/,
+];
+
+const SECURITY_PATCH_PATTERNS = [
+  { ruleId: "unsafe-eval", re: /\beval\s*\(/, message: "Patch introduces eval() — avoid dynamic code execution." },
+  { ruleId: "unsafe-dom", re: /dangerouslySetInnerHTML|\.innerHTML\s*=/, message: "Patch may assign raw HTML — XSS risk; sanitize or use safe APIs." },
+  { ruleId: "unsafe-shell", re: /child_process|execSync\s*\(|spawn\s*\(/, message: "Patch touches process execution — verify inputs and sandboxing." },
+  {
+    ruleId: "suspicious-auth",
+    re: /(password|api[_-]?key|secret)\s*=\s*['"][^'"]+['"]/i,
+    message: "Patch may embed credentials in source — use env/secrets manager.",
+  },
 ];
 
 const SKIP_PATH_FRAGMENTS = [
@@ -28,6 +40,10 @@ const SKIP_PATH_FRAGMENTS = [
  * @property {string} message
  * @property {string} [filename]
  * @property {number} [line]
+ * @property {import('./finding-meta.js').FindingTag} [tag]
+ * @property {import('./finding-meta.js').FindingPriority} [priority]
+ * @property {string} [source]
+ * @property {number} [githubCommentId]
  */
 
 /**
@@ -63,11 +79,16 @@ export function reviewMicroPr(micro, ctx = {}) {
   const findings = [];
   let hunksReviewed = 0;
 
+  /** @param {Finding} raw */
+  const note = (raw) => {
+    findings.push(enrichFinding(raw));
+  };
+
   for (const file of micro.files) {
     const name = file.filename;
 
     if (SKIP_PATH_FRAGMENTS.some((s) => name.includes(s))) {
-      findings.push({
+      note({
         ruleId: "skip-generated",
         severity: "info",
         message: `Skipped heavy/generated path: \`${name}\``,
@@ -77,7 +98,7 @@ export function reviewMicroPr(micro, ctx = {}) {
     }
 
     if (file.additions + file.deletions > 500) {
-      findings.push({
+      note({
         ruleId: "large-file-delta",
         severity: "warning",
         message: `Large change (+${file.additions}/-${file.deletions}); consider splitting this slice.`,
@@ -86,7 +107,7 @@ export function reviewMicroPr(micro, ctx = {}) {
     }
 
     if (ctx.multiBoundaryFiles?.includes(name)) {
-      findings.push({
+      note({
         ruleId: "multi-component-file",
         severity: "warning",
         message: "File matches multiple components; review cross-boundary impact in composite review.",
@@ -97,7 +118,7 @@ export function reviewMicroPr(micro, ctx = {}) {
     const patch = file.patch ?? "";
     for (const re of SECRET_PATTERNS) {
       if (re.test(patch)) {
-        findings.push({
+        note({
           ruleId: "possible-secret",
           severity: "blocker",
           message: "Patch may contain secrets or private key material.",
@@ -107,8 +128,20 @@ export function reviewMicroPr(micro, ctx = {}) {
       }
     }
 
+    for (const { ruleId, re, message } of SECURITY_PATCH_PATTERNS) {
+      if (re.test(patch)) {
+        note({
+          ruleId,
+          severity: ruleId === "suspicious-auth" ? "warning" : "warning",
+          message,
+          filename: name,
+        });
+        break;
+      }
+    }
+
     if (/\.env(\.|$)/.test(name) && file.status !== "removed") {
-      findings.push({
+      note({
         ruleId: "env-file",
         severity: "blocker",
         message: "Changes to env files are high risk.",
@@ -117,7 +150,7 @@ export function reviewMicroPr(micro, ctx = {}) {
     }
 
     if (/migrations?\//.test(name) && micro.componentId !== "persistence") {
-      findings.push({
+      note({
         ruleId: "migration-outside-persistence",
         severity: "warning",
         message: "Schema/migration change outside persistence component.",
@@ -127,7 +160,7 @@ export function reviewMicroPr(micro, ctx = {}) {
 
     if (micro.componentId === "domain" && /\.java$/i.test(name)) {
       if (/^\+.*\bimport\s+org\.springframework\./m.test(patch) || /^\+.*@(Service|Component|Repository)\b/m.test(patch)) {
-        findings.push({
+        note({
           ruleId: "solid/dip-domain-framework",
           severity: "warning",
           message: "DIP/SRP: domain adds framework annotations or Spring imports — prefer pure domain + infrastructure wiring.",
@@ -139,7 +172,7 @@ export function reviewMicroPr(micro, ctx = {}) {
     if (micro.componentId === "api" && /Controller\.java$/i.test(name)) {
       const added = patch.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
       if (added > 35) {
-        findings.push({
+        note({
           ruleId: "solid/srp-fat-controller",
           severity: "info",
           message: "SRP: large controller diff — delegate business rules to the application layer.",
@@ -153,7 +186,7 @@ export function reviewMicroPr(micro, ctx = {}) {
 
     for (const hunk of hunks) {
       if (/TODO|FIXME|HACK/.test(hunk)) {
-        findings.push({
+        note({
           ruleId: "todo-in-hunk",
           severity: "info",
           message: "Hunk introduces TODO/FIXME/HACK marker.",
@@ -161,7 +194,7 @@ export function reviewMicroPr(micro, ctx = {}) {
         });
       }
       if (/console\.(log|debug)\(/.test(hunk)) {
-        findings.push({
+        note({
           ruleId: "debug-log",
           severity: "info",
           message: "Console logging in changed hunk.",
@@ -171,7 +204,36 @@ export function reviewMicroPr(micro, ctx = {}) {
     }
   }
 
+  ensureSpotCheckFindings(micro, findings, note);
   return finalizeMicroReview(micro, findings, hunksReviewed);
+}
+
+/**
+ * When heuristics find nothing actionable, surface file-level spot-check items so the findings panel has targets.
+ *
+ * @param {import('./partition.js').MicroPr} micro
+ * @param {Finding[]} findings
+ * @param {(raw: Finding) => void} note
+ */
+function ensureSpotCheckFindings(micro, findings, note) {
+  const substantive = findings.filter((f) => f.ruleId !== "skip-generated");
+  if (substantive.length > 0) return;
+
+  const candidates = [...micro.files]
+    .filter((f) => !SKIP_PATH_FRAGMENTS.some((s) => f.filename.includes(s)))
+    .sort((a, b) => b.additions + b.deletions - (a.additions + a.deletions))
+    .slice(0, 4);
+
+  if (!candidates.length) return;
+
+  for (const file of candidates) {
+    note({
+      ruleId: "review/spot-check",
+      severity: "info",
+      message: `No automated flags; spot-check this change (+${file.additions}/-${file.deletions}).`,
+      filename: file.filename,
+    });
+  }
 }
 
 /**
