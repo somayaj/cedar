@@ -74,6 +74,7 @@ function reviewPayload(report) {
     microResults: report.microResults,
     composite: report.composite,
     macroReview: report.macroReview,
+    cursorReviewSummary: report.cursorReviewSummary,
     outputMarkdown: report.outputMarkdown,
   };
 }

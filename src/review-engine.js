@@ -61,7 +61,7 @@ const SKIP_PATH_FRAGMENTS = [
  * @property {number} filesReviewed
  * @property {number} hunksReviewed
  * @property {Finding[]} [reviewComments] Composer line-anchored comments (UI only; heuristics stay in findings)
- * @property {{ source: string, count: number }} [cursorReview]
+ * @property {{ source: string, count: number, status?: 'ok'|'empty'|'error'|'stopped', error?: string }} [cursorReview]
  */
 
 /**

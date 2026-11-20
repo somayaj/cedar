@@ -957,8 +957,28 @@ function wireSliceTabs(root, initialSliceId = "") {
   if (initialSliceId) activateSliceTab(root, initialSliceId);
 }
 
+function renderCursorReviewRollup(summary) {
+  if (!summary?.enabled) return "";
+  const sliceRows = (summary.slice?.bySlice ?? [])
+    .map((s) => {
+      const fail = s.error ? ' <span class="text-rose-400/90">· failed</span>' : "";
+      return `<li class="flex justify-between gap-2 text-[9px] text-zinc-500">
+        <span class="truncate">${escapeHtml(s.componentName)}${fail}</span>
+        <span class="shrink-0 tabular-nums text-zinc-400">${s.count}</span>
+      </li>`;
+    })
+    .join("");
+  const macroCount = summary.macro?.findingCount ?? 0;
+  return `<div class="mt-3 border-t border-white/[0.06] pt-3" aria-labelledby="cedar-cursor-rollup-heading">
+    <p id="cedar-cursor-rollup-heading" class="text-[9px] font-medium uppercase tracking-wide text-zinc-500">Cursor findings</p>
+    <p class="mt-1 text-[10px] font-medium text-zinc-300">${summary.totalFindings} on this PR</p>
+    <p class="text-[9px] text-zinc-600">${summary.slice.total} slice · ${macroCount} macro</p>
+    ${sliceRows ? `<ul class="mt-2 max-h-36 space-y-0.5 overflow-y-auto">${sliceRows}</ul>` : ""}
+  </div>`;
+}
+
 function renderResults(container, data) {
-  const { pull, gate, microPrs, microResults, macroReview, composite, breakouts, partition, process, target } = data;
+  const { pull, gate, microPrs, microResults, macroReview, cursorReviewSummary, composite, breakouts, partition, process, target } = data;
   const macroReviewHtml = renderMacroReviewPanelHtml(macroReview);
   sliceApprovals = window.__cedarSession?.sliceApprovals ?? sliceApprovals;
   ensureFindingSession(window.__cedarSession);
@@ -996,10 +1016,17 @@ function renderResults(container, data) {
     .map((step, i) => {
       const done = step.status === "done";
       const blocked = step.status === "blocked";
+      const skipped = step.status === "skipped";
       return `
         <li class="flex gap-2 text-[10px] leading-snug">
           <span class="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-semibold ${
-            done ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : blocked ? "border-rose-500/40 text-rose-300" : "border-white/10 text-zinc-500"
+            done
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+              : blocked
+                ? "border-rose-500/40 text-rose-300"
+                : skipped
+                  ? "border-white/[0.06] text-zinc-600"
+                  : "border-white/10 text-zinc-500"
           }">${i + 1}</span>
           <span class="min-w-0">
             <span class="font-medium text-zinc-200">${escapeHtml(step.label)}</span>
@@ -1208,6 +1235,7 @@ function renderResults(container, data) {
         <div class="cedar-review-rail-card">
           <p class="cedar-rail-label">Pipeline</p>
           <ul class="mt-2 space-y-2">${processList}</ul>
+          ${renderCursorReviewRollup(cursorReviewSummary)}
         </div>
         <div class="cedar-review-rail-card cedar-review-rail-slices lg:hidden">
           <p class="cedar-rail-label cedar-rail-label-with-icon">${slicesIconSvg("cedar-rail-icon")}<span>Slices</span></p>

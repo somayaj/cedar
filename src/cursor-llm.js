@@ -91,7 +91,7 @@ async function cursorChatOneShot(opts) {
 }
 
 /**
- * Composer slice review — bridge plan mode or direct API only (no bridge→Agent fallback).
+ * Composer slice/macro review — bridge plan mode when available, else Agent.prompt one-shot.
  *
  * @param {Parameters<typeof cursorChat>[0]} opts
  */
@@ -99,13 +99,22 @@ export async function composerReviewChat(opts) {
   const apiKey = cursorApiKey();
   if (!apiKey) throw new Error("CURSOR_API_KEY is not set");
 
+  const withJson = { ...opts, json: true };
+
   if (process.env.CEDAR_CURSOR_BRIDGE !== "false") {
-    return cursorBridgeChat({
-      ...opts,
-      json: true,
-      mode: "plan",
-    });
+    try {
+      return await cursorBridgeChat({
+        ...withJson,
+        mode: "plan",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (process.env.CEDAR_CURSOR_BRIDGE_STRICT === "true") {
+        throw err;
+      }
+      console.warn(`[cedar] Composer review bridge unavailable (${message}); using Agent.prompt fallback`);
+    }
   }
 
-  return cursorChatOneShot({ ...opts, json: true });
+  return cursorChatOneShot(withJson);
 }

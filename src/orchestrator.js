@@ -31,7 +31,9 @@ import { buildDiagramGraph } from "./diagram-graph.js";
 import { resolveArchitectureVisual } from "./ai-architecture-visual.js";
 import { breakoutCacheKey, readBreakoutCache, writeBreakoutCache } from "./breakout-cache.js";
 import { resolveAiModel } from "./default-model.js";
-import { emitPhase } from "./review-progress.js";
+import { emitPhase, emitReviewProgress } from "./review-progress.js";
+import { buildCursorReviewSummary, summarizeCursorSliceReview } from "./cursor-review-summary.js";
+import { isCodeReviewFinding } from "./finding-meta.js";
 import {
   alignMicroPrsToPrArchitecture,
   componentsForPrPartition,
@@ -235,7 +237,7 @@ export async function runPrReviewPipeline(opts) {
   /** @type {import('./ai-macro-review.js').ReturnType<typeof aiMacroPrReview> extends Promise<infer T> ? T : never} */
   let macroReview = null;
   if (useAiReview && sliceReviewAiAvailable()) {
-    phase("macro", "Macro PR review", "running");
+    phase("macro", "Cursor · macro review (entire PR)", "running");
     try {
       macroReview = await aiMacroPrReview({
         pull: {
@@ -247,13 +249,26 @@ export async function runPrReviewPipeline(opts) {
         microPrs: ordered,
         microResults,
       });
-      phase("macro", "Macro PR review", "done", macroReview ? "Composer" : "empty");
+      const macroThemes = macroReview?.findings?.length ?? 0;
+      const macroDetail = macroReview
+        ? `${macroThemes} PR theme(s) · ${macroReview.event ?? "COMMENT"}`
+        : "empty";
+      phase("macro", "Cursor · macro review (entire PR)", "done", macroDetail);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      phase("macro", "Macro PR review", "blocked", message.slice(0, 80));
+      phase("macro", "Cursor · macro review (entire PR)", "blocked", message.slice(0, 80));
       console.warn("[cedar] Macro PR review failed:", err);
     }
+
+    const cursorReviewSummary = buildCursorReviewSummary(microResults, macroReview, useAiReview);
+    const slicePart = `${cursorReviewSummary.slice.total} slice comment(s) · ${cursorReviewSummary.slice.slicesWithFindings}/${cursorReviewSummary.slice.slicesAttempted} slices`;
+    const macroPart = cursorReviewSummary.macro
+      ? `${cursorReviewSummary.macro.findingCount} PR theme(s)`
+      : "no macro themes";
+    phase("cursor-report", "Cursor · PR findings", "done", `${slicePart} · ${macroPart}`);
   }
+
+  const cursorReviewSummary = buildCursorReviewSummary(microResults, macroReview, useAiReview);
 
   const touched = microResults.filter((r) => r.status !== "skipped");
   const allSlicesReviewed = touched.every((r) => r.status === "passed" || r.status === "failed");
@@ -330,6 +345,9 @@ export async function runPrReviewPipeline(opts) {
     sliceCount: microPrs.filter((m) => m.files.length > 0).length,
     microResults,
     compositeReady,
+    useAiReview,
+    macroReview,
+    cursorReviewSummary,
   });
 
   return {
@@ -392,6 +410,7 @@ export async function runPrReviewPipeline(opts) {
     })),
     microResults,
     macroReview,
+    cursorReviewSummary,
     gate,
     composite,
     outputMarkdown,
@@ -437,26 +456,70 @@ async function runMicroReviewPass(ordered, ctx) {
   const microResults = [];
   let aiSliceReviewStopped = false;
 
+  const cursorEnabled = ctx.useAiReview && sliceReviewAiAvailable();
+  const reviewable = ordered.filter((m) => (m.files?.length ?? 0) > 0);
+  const reviewableTotal = reviewable.length;
+  let slicePassIndex = 0;
+
+  if (cursorEnabled && reviewableTotal > 0) {
+    emitPhase("cursor-slices", "Cursor · slice review", "running", `${reviewableTotal} slice(s)`);
+  }
+
   for (const micro of ordered) {
     let result = reviewMicroPr(micro, { multiBoundaryFiles: ctx.multiBoundaryFiles });
 
-    if (ctx.useAiReview && sliceReviewAiAvailable() && !aiSliceReviewStopped && micro.files.length) {
+    if (cursorEnabled && !aiSliceReviewStopped && micro.files.length) {
+      slicePassIndex += 1;
+      const sliceLabel = `${micro.componentName} (${slicePassIndex}/${reviewableTotal})`;
+      emitReviewProgress({
+        type: "activity",
+        text: `Cursor · ${sliceLabel}`,
+        phase: "cursor-slices",
+      });
+      emitPhase("cursor-slices", "Cursor · slice review", "running", sliceLabel);
+
       try {
         const aiFindings = await aiReviewMicroSlice(micro, {
           architectureSummary: ctx.breakoutPlan?.architectureSummary,
         });
+        const valid = aiFindings.filter(isCodeReviewFinding);
         result = {
           ...result,
           reviewComments: aiFindings,
-          cursorReview: { source: "cursor", count: aiFindings.length },
+          cursorReview: {
+            source: "cursor",
+            count: valid.length,
+            status: valid.length ? "ok" : "empty",
+          },
         };
+        emitPhase(
+          "cursor-slices",
+          "Cursor · slice review",
+          "running",
+          `${sliceLabel} · ${valid.length} finding(s)`
+        );
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         if (isAiAuthError(err)) {
           aiSliceReviewStopped = true;
           console.warn("[cedar] AI slice review disabled after auth error:", err);
         } else {
           console.warn("[cedar] AI slice review skipped for slice", micro.componentId, err);
         }
+        result = {
+          ...result,
+          cursorReview: {
+            source: "cursor",
+            count: 0,
+            status: aiSliceReviewStopped ? "stopped" : "error",
+            error: message.slice(0, 240),
+          },
+        };
+        emitReviewProgress({
+          type: "activity",
+          text: `Cursor slice failed · ${micro.componentName}`,
+          phase: "error",
+        });
       }
     }
 
@@ -476,6 +539,17 @@ async function runMicroReviewPass(ordered, ctx) {
         ].join("\n"),
       });
     }
+  }
+
+  if (cursorEnabled && reviewableTotal > 0) {
+    const stats = summarizeCursorSliceReview(microResults);
+    const detail = `${stats.total} finding(s) · ${stats.slicesWithFindings}/${reviewableTotal} slices`;
+    emitPhase(
+      "cursor-slices",
+      "Cursor · slice review",
+      aiSliceReviewStopped ? "blocked" : "done",
+      aiSliceReviewStopped ? `stopped · ${detail}` : detail
+    );
   }
 
   return microResults;
@@ -515,11 +589,17 @@ function stripFindingsForJson(r) {
  *   sliceCount: number,
  *   microResults: import('./review-engine.js').MicroReviewResult[],
  *   compositeReady: boolean,
+ *   useAiReview: boolean,
+ *   macroReview: { findings?: unknown[] } | null,
+ *   cursorReviewSummary: ReturnType<typeof buildCursorReviewSummary>,
  * }} ctx
  */
 function buildProcessSteps(ctx) {
   const microDone = ctx.microResults.filter((r) => r.status !== "skipped");
   const microPass = microDone.every((r) => r.status === "passed");
+  const cursor = ctx.cursorReviewSummary;
+  const cursorOn = cursor.enabled;
+  const sliceStopped = cursor.slice.bySlice.some((s) => s.status === "stopped" || s.status === "error");
 
   return [
     {
@@ -539,15 +619,39 @@ function buildProcessSteps(ctx) {
     },
     {
       id: "micro",
-      label: "Micro review (per slice / file)",
+      label: "Heuristic review (per slice)",
       status: microPass ? "done" : microDone.some((r) => r.status === "failed") ? "blocked" : "done",
-      detail: `${microDone.length} slice(s)`,
+      detail: `${microDone.length} slice(s) · rules & diff scan`,
+    },
+    {
+      id: "cursor-slices",
+      label: "Cursor · slice review",
+      status: !cursorOn
+        ? "skipped"
+        : sliceStopped && cursor.slice.total === 0
+          ? "blocked"
+          : "done",
+      detail: !cursorOn
+        ? "CURSOR_API_KEY or CEDAR_AI_SLICE_REVIEW=off"
+        : `${cursor.slice.total} finding(s) · ${cursor.slice.slicesWithFindings}/${cursor.slice.slicesAttempted} slices`,
     },
     {
       id: "macro",
-      label: "Macro review (entire PR)",
-      status: "done",
-      detail: "Composer after micro",
+      label: "Cursor · macro review (entire PR)",
+      status: !cursorOn ? "skipped" : ctx.macroReview ? "done" : "blocked",
+      detail: !cursorOn
+        ? "off"
+        : ctx.macroReview
+          ? `${(ctx.macroReview.findings ?? []).length} PR theme(s) · merge recommendation`
+          : "Composer did not return macro review",
+    },
+    {
+      id: "cursor-report",
+      label: "Cursor · PR findings (overall)",
+      status: cursorOn ? "done" : "skipped",
+      detail: cursorOn
+        ? `${cursor.totalFindings} total · ${cursor.slice.total} slice comment(s) + ${cursor.macro?.findingCount ?? 0} macro theme(s)`
+        : "off",
     },
     {
       id: "approve-slices",
