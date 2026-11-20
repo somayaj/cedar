@@ -26,10 +26,7 @@ function renderMacroFindingMeta(f) {
  */
 export function renderMacroReviewPanelHtml(macroReview) {
   if (!macroReview?.body?.trim() && !(macroReview?.findings?.length)) {
-    return `<section class="cedar-glass-subtle cedar-macro-review mb-6 px-5 py-4" aria-labelledby="cedar-macro-review-heading">
-      <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Cursor · macro review (entire PR)</h2>
-      <p class="mt-2 text-xs leading-relaxed text-zinc-500">PR-wide themes and recommendation from Composer — runs before per-slice Cursor findings. Set <span class="font-mono text-zinc-600">CURSOR_API_KEY</span> and re-run <strong class="font-medium text-zinc-400">Start review</strong>.</p>
-    </section>`;
+    return "";
   }
 
   const event = macroReview.event ?? "COMMENT";

@@ -80,8 +80,6 @@ Rules:
   });
 
   const parsed = parseJsonFromModel(raw);
-  const body = String(parsed.body ?? "").trim();
-  if (!body) return null;
 
   const verdictRaw = String(parsed.verdict ?? "comment").toLowerCase();
   const event =
@@ -104,6 +102,16 @@ Rules:
       });
     })
     .filter(Boolean);
+
+  let body = String(parsed.body ?? "").trim();
+  if (!body && findings.length) {
+    body = [
+      "## Summary",
+      "",
+      ...findings.map((f) => `- **${f.priority ?? "P2"}** · ${f.message}`),
+    ].join("\n");
+  }
+  if (!body && !findings.length) return null;
 
   return {
     body,
