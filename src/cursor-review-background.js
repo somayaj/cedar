@@ -15,9 +15,6 @@ function isAiAuthError(err) {
 }
 
 /**
- * @param {string | undefined} raw
- */
-/**
  * @param {Array<{ files?: Array<{ path?: string, filename?: string, status?: string, patch?: string | null, additions?: number, deletions?: number }> } & Record<string, unknown>>} microPrs
  */
 export function hydrateMicroPrsFromReport(microPrs) {
@@ -69,8 +66,54 @@ export async function runBackgroundCursorReview(opts) {
   const ordered = opts.microPrs.filter((m) => (m.files?.length ?? 0) > 0);
   let aiSliceReviewStopped = false;
 
+  emit({ type: "activity", text: "Cursor macro review (background)…", phase: "macro" });
+  emit({
+    type: "cursor_progress",
+    completed: 0,
+    total: 1,
+    phase: "macro",
+    detail: "Whole-PR themes first…",
+  });
+  emitPhase("macro", "Cursor · macro review (entire PR)", "running", "Background");
+
+  /** @type {import("./ai-macro-review.js").ReturnType<typeof aiMacroPrReview> extends Promise<infer T> ? T : null} */
+  let macroReview = null;
+  try {
+    macroReview = await aiMacroPrReview({
+      pull: opts.pull,
+      breakouts: opts.breakouts,
+      microPrs: opts.microPrs,
+      microResults,
+    });
+    const macroThemes = macroReview?.findings?.length ?? 0;
+    emitPhase(
+      "macro",
+      "Cursor · macro review (entire PR)",
+      "done",
+      `${macroThemes} PR theme(s) · background`
+    );
+    emit({
+      type: "cursor_progress",
+      completed: 1,
+      total: 1,
+      phase: "macro",
+      detail: `${macroThemes} PR theme(s)`,
+    });
+    emit({ type: "cursor_macro", macroReview, cursorReviewSummary: buildCursorReviewSummary(microResults, macroReview, useAiReview) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    emitPhase("macro", "Cursor · macro review (entire PR)", "blocked", message.slice(0, 80));
+    emit({
+      type: "cursor_progress",
+      completed: 1,
+      total: 1,
+      phase: "macro",
+      detail: "Macro review failed — continuing with slices",
+    });
+  }
+
   emit({ type: "activity", text: "Cursor slice review (background)…", phase: "cursor-slices" });
-  emitPhase("cursor-slices", "Cursor · slice review", "running", `${ordered.length} slice(s) · background`);
+  emitPhase("cursor-slices", "Cursor · slice review", "running", `${ordered.length} slice(s) · after macro`);
 
   let slicePassIndex = 0;
   for (const micro of opts.microPrs) {
@@ -150,36 +193,13 @@ export async function runBackgroundCursorReview(opts) {
     }
   }
 
-  const stats = buildCursorReviewSummary(microResults, null, useAiReview).slice;
+  const stats = buildCursorReviewSummary(microResults, macroReview, useAiReview).slice;
   emitPhase(
     "cursor-slices",
     "Cursor · slice review",
     aiSliceReviewStopped ? "blocked" : "done",
     `${stats.total} finding(s) · background`
   );
-
-  emit({ type: "cursor_progress", completed: ordered.length, total: ordered.length, phase: "macro" });
-  emitPhase("macro", "Cursor · macro review (entire PR)", "running");
-  /** @type {import("./ai-macro-review.js").ReturnType<typeof aiMacroPrReview> extends Promise<infer T> ? T : null} */
-  let macroReview = null;
-  try {
-    macroReview = await aiMacroPrReview({
-      pull: opts.pull,
-      breakouts: opts.breakouts,
-      microPrs: opts.microPrs,
-      microResults,
-    });
-    const macroThemes = macroReview?.findings?.length ?? 0;
-    emitPhase(
-      "macro",
-      "Cursor · macro review (entire PR)",
-      "done",
-      `${macroThemes} PR theme(s) · background`
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    emitPhase("macro", "Cursor · macro review (entire PR)", "blocked", message.slice(0, 80));
-  }
 
   const cursorReviewSummary = buildCursorReviewSummary(microResults, macroReview, useAiReview);
   emit({

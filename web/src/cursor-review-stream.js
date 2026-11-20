@@ -60,6 +60,13 @@ export function applyCursorBackgroundEvent(event, refreshUi) {
 
   applyCursorBackgroundProgress(/** @type {{ type?: string, completed?: number, total?: number, phase?: string }} */ (event));
 
+  if (event.type === "cursor_macro" && event.macroReview != null) {
+    session.data.macroReview = event.macroReview;
+    if (event.cursorReviewSummary) session.data.cursorReviewSummary = event.cursorReviewSummary;
+    refreshUi();
+    return;
+  }
+
   if (event.type === "cursor_slice" && event.componentId && event.microResult) {
     const id = String(event.componentId);
     const idx = session.data.microResults.findIndex((r) => r.componentId === id);
@@ -76,7 +83,7 @@ export function applyCursorBackgroundEvent(event, refreshUi) {
     if (event.macroReview != null) session.data.macroReview = event.macroReview;
     if (event.cursorReviewSummary) session.data.cursorReviewSummary = event.cursorReviewSummary;
     session.data.cursorReviewPending = false;
-    setReviewProgress(100, "Cursor review complete", "Slice + macro findings are ready.");
+    setReviewProgress(100, "Cursor review complete", "Macro + slice findings are ready.");
     hideReviewProgressDock({ delayMs: 3500 });
     refreshUi();
   }

@@ -9,8 +9,10 @@ const state = {
 /** @type {{ pct: number, label: string, detail: string }} */
 let lastProgress = { pct: 0, label: "Review", detail: "" };
 
-const CURSOR_SLICE_PCT_START = 55;
-const CURSOR_SLICE_PCT_SPAN = 38;
+const CURSOR_BG_START = 55;
+const CURSOR_MACRO_SPAN = 12;
+const CURSOR_SLICE_START = 67;
+const CURSOR_SLICE_SPAN = 26;
 
 /** @type {Record<string, number>} */
 const PHASE_PCT = {
@@ -62,11 +64,18 @@ export function restoreReviewProgressDock() {
  * @param {number} total
  * @param {{ inFlight?: boolean }} [opts]
  */
+function cursorMacroBackgroundPct(completed, total, inFlight) {
+  const safeTotal = Math.max(1, total);
+  let frac = completed / safeTotal;
+  if (inFlight) frac = Math.min(1, (completed + 0.5) / safeTotal);
+  return CURSOR_BG_START + frac * CURSOR_MACRO_SPAN;
+}
+
 function cursorSliceBackgroundPct(completed, total, opts) {
   const safeTotal = Math.max(1, total);
   let frac = completed / safeTotal;
   if (opts?.inFlight) frac = Math.min(1, (completed + 0.35) / safeTotal);
-  return CURSOR_SLICE_PCT_START + frac * CURSOR_SLICE_PCT_SPAN;
+  return CURSOR_SLICE_START + frac * CURSOR_SLICE_SPAN;
 }
 
 /**
@@ -145,7 +154,12 @@ export function applyReviewProgressFromPhaseEvent(event) {
   }
   if (event.status === "skipped" && id === "cursor-slices") pct = PHASE_PCT["cursor-slices-skipped"];
   if (event.status === "running" && id === "macro") {
-    pct = state.incrementalSlices ? 94 : 84;
+    pct = state.incrementalSlices
+      ? cursorMacroBackgroundPct(0, 1, true)
+      : CURSOR_BG_START + CURSOR_MACRO_SPAN * 0.35;
+  }
+  if (event.status === "done" && id === "macro") {
+    pct = CURSOR_SLICE_START;
   }
   if (event.status === "skipped" && id === "macro") pct = 58;
   if (event.status === "done" && id === "cursor-report") pct = 98;
@@ -180,7 +194,15 @@ export function applyCursorBackgroundProgress(event) {
   state.totalSlices = total;
   state.completedSlices = completed;
   if (phase === "macro") {
-    setReviewProgress(94, "Cursor · macro review (entire PR)", "Whole-PR themes in background…");
+    const inFlight = completed < total;
+    const pct = cursorMacroBackgroundPct(completed, total, inFlight);
+    const detail =
+      typeof event.detail === "string" && event.detail
+        ? event.detail
+        : inFlight
+          ? "Whole-PR themes first…"
+          : "Macro review complete";
+    setReviewProgress(pct, "Cursor · macro review (entire PR)", detail);
     return;
   }
   const inFlight = completed < total;

@@ -413,8 +413,8 @@ async function onSubmit(e) {
       showReviewProgressDock();
       setReviewProgress(
         55,
-        "Cursor · slice review (background)",
-        `0 of ${sliceTotal} slices · layout ready`
+        "Cursor · macro review (entire PR)",
+        `Macro first, then ${sliceTotal} slice(s) · layout ready`
       );
     }
   } catch (err) {
@@ -464,7 +464,7 @@ async function startBackgroundCursorReviewIfNeeded(container) {
 
   showReviewProgressDock();
   const sliceTotal = (session.data.microPrs ?? []).filter((m) => (m.files?.length ?? m.fileCount ?? 0) > 0).length;
-  setReviewProgress(55, "Cursor · slice review (background)", `0 of ${sliceTotal} slices`);
+  setReviewProgress(55, "Cursor · macro review (entire PR)", `Macro first, then ${sliceTotal} slice(s)`);
 
   const payload = {
     cursorApiKey: session.cursorApiKey,

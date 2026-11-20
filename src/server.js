@@ -251,7 +251,7 @@ app.post("/api/cursor-review/stream", async (req, res) => {
   };
 
   try {
-    send({ type: "activity", text: "Cursor review (background)…", phase: "cursor-slices" });
+    send({ type: "activity", text: "Cursor review (background) — macro first…", phase: "macro" });
     await runWithReviewProgress(send, () =>
       runWithReviewCredentials({ cursorApiKey: cursorKey }, () =>
         runBackgroundCursorReview({
