@@ -298,7 +298,7 @@ function mermaidToolbar(sliceBadgesHtml = "") {
     <button type="button" class="diagram-tool-btn" data-diagram-action="out" title="Zoom out">−</button>
     <button type="button" class="diagram-tool-btn" data-diagram-action="reset" title="Fit">Fit</button>
     <button type="button" class="diagram-tool-btn" data-diagram-action="collapse" title="Collapse diagram" aria-expanded="true">▾</button>
-    <button type="button" class="diagram-tool-btn" data-diagram-action="maximize" title="Expand panel" aria-pressed="false">⤢</button>
+    <button type="button" class="diagram-tool-btn" data-diagram-action="maximize" title="Maximize panel (scroll or zoom UML)" aria-pressed="false">⤢</button>
   </div>`;
 }
 

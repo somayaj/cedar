@@ -168,7 +168,9 @@ export async function mountCompleteLayoutViews(root, views) {
       const wrap = pre.closest("[data-diagram-wrap]");
       const svg = pre.querySelector("svg");
       if (ok && wrap instanceof HTMLElement && svg instanceof SVGSVGElement) {
-        mountDiagramStageFullWidth(wrap, pre);
+        const isUml = wrap.getAttribute("data-layout-view") === "uml";
+        if (isUml) mountUmlDiagramScrollable(wrap, pre);
+        else mountDiagramStageFullWidth(wrap, pre);
         activateDiagramUx(wrap);
         drawn += 1;
       } else if (!ok && pre instanceof HTMLElement) {
@@ -324,6 +326,67 @@ export function refitPanZoomDiagrams(root) {
 }
 
 /**
+ * UML class diagram: natural size × zoom (scrollable stage; do not shrink to panel width).
+ * @param {HTMLElement} wrap
+ * @param {HTMLElement} pre
+ */
+function mountUmlDiagramScrollable(wrap, pre) {
+  const stage = wrap.querySelector(".diagram-complete-layout");
+  const svg = pre.querySelector("svg");
+  if (!(stage instanceof HTMLElement) || !(svg instanceof SVGSVGElement)) return;
+
+  const prevPz = panZoomByWrap.get(wrap);
+  if (prevPz) {
+    try {
+      prevPz.destroy();
+    } catch {
+      /* */
+    }
+    panZoomByWrap.delete(wrap);
+  }
+
+  if (!umlZoomByWrap.has(wrap)) umlZoomByWrap.set(wrap, 1);
+
+  const fit = () => {
+    const zoom = umlZoomByWrap.get(wrap) ?? 1;
+    const vb = svg.viewBox?.baseVal;
+    const naturalW = vb?.width > 0 ? vb.width : svg.width?.baseVal?.value || 0;
+    const naturalH = vb?.height > 0 ? vb.height : svg.height?.baseVal?.value || 0;
+    if (naturalW > 0 && naturalH > 0) {
+      const w = Math.max(Math.round(naturalW * zoom), 280);
+      const h = Math.max(Math.round(naturalH * zoom), 120);
+      svg.setAttribute("width", String(w));
+      svg.setAttribute("height", String(h));
+      svg.style.width = `${w}px`;
+      svg.style.height = `${h}px`;
+    } else {
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+      svg.style.width = "";
+      svg.style.height = "";
+    }
+    svg.style.maxWidth = "none";
+    svg.style.minWidth = "min(100%, 280px)";
+    svg.style.display = "block";
+    svg.style.margin = "0";
+    svg.style.visibility = "visible";
+    pre.style.width = "max-content";
+    pre.style.minWidth = "100%";
+  };
+
+  umlFitByWrap.set(wrap, fit);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(fit);
+  });
+
+  if (!resizeObserverByWrap.has(wrap)) {
+    const ro = new ResizeObserver(() => fit());
+    ro.observe(stage);
+    resizeObserverByWrap.set(wrap, ro);
+  }
+}
+
+/**
  * Scale Mermaid SVG to the full diagram stage (matches Overview viewport sizing).
  * @param {HTMLElement} wrap
  * @param {HTMLElement} pre
@@ -409,9 +472,9 @@ export function wireDiagramResizeListeners(root) {
 }
 
 function wireDiagramToolbars(root) {
-  const layoutHost =
+  const refitRoot =
     root.querySelector("#architecture-read-mermaid") ??
-    (root instanceof HTMLElement && root.id === "architecture-read-mermaid" ? root : null);
+    (root instanceof HTMLElement && root.id === "architecture-read-mermaid" ? root : root);
 
   root.querySelectorAll("[data-diagram-wrap]").forEach((wrap) => {
     const bar = wrap.querySelector("[data-diagram-toolbar]");
@@ -420,6 +483,7 @@ function wireDiagramToolbars(root) {
 
     bar.querySelectorAll("[data-diagram-action]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        const layoutHost = wrap.closest("#architecture-read-mermaid, .cedar-complete-layout-views");
         const umlFit = umlFitByWrap.get(wrap);
         const pz = panZoomByWrap.get(wrap);
         const action = btn.getAttribute("data-diagram-action");
@@ -430,7 +494,7 @@ function wireDiagramToolbars(root) {
           if (canvas instanceof HTMLElement) canvas.hidden = collapsed;
           btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
           btn.textContent = collapsed ? "▸" : "▾";
-          refitPanZoomDiagrams(root);
+          refitPanZoomDiagrams(refitRoot);
           return;
         }
 
@@ -451,7 +515,7 @@ function wireDiagramToolbars(root) {
               el.classList.remove("is-diagram-minimized");
             });
           }
-          requestAnimationFrame(() => refitPanZoomDiagrams(root));
+          requestAnimationFrame(() => refitPanZoomDiagrams(refitRoot));
           return;
         }
 
