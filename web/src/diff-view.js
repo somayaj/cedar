@@ -166,7 +166,7 @@ export function renderSliceFileReviews(files, pullUrl = "") {
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p class="cedar-label mb-0">Files changed</p>
-          <p class="mt-1 text-[8px] text-zinc-600">Click a line or + in the gutter · posts to GitHub</p>
+          <p class="mt-1 text-[8px] text-zinc-600">Click a line or + in the gutter · green lines have comments (click line to show/hide)</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button type="button" class="cedar-btn-secondary cedar-btn-compact cedar-diff-comments-visibility" data-comments-toggle aria-pressed="true">

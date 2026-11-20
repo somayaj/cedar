@@ -319,13 +319,14 @@ function setCommentsHostVisible(host, visible) {
   host.querySelectorAll(".cedar-diff-comment-thread-row").forEach((threadRow) => {
     if (!(threadRow instanceof HTMLElement)) return;
     threadRow.classList.toggle("cedar-diff-comments-off", !visible);
-    if (visible) threadRow.classList.remove("is-collapsed");
+    if (visible) setThreadRowExpanded(threadRow, true);
   });
   const btn = host.querySelector("[data-comments-toggle]");
   if (btn instanceof HTMLButtonElement) {
     btn.textContent = visible ? "Hide comments" : "Show comments";
     btn.setAttribute("aria-pressed", visible ? "true" : "false");
   }
+  syncAllGutterBadges(host);
 }
 
 /**
@@ -335,13 +336,100 @@ function applyCommentsHostVisibility(host) {
   setCommentsHostVisible(host, commentsHostVisible(host));
 }
 
+/**
+ * @param {HTMLElement} row
+ */
+function primaryGutterForRow(row) {
+  const newCell = row.querySelector(".line-num2");
+  if (newCell) {
+    const g = newCell.closest(".d2h-code-linenumber");
+    if (g instanceof HTMLElement) return g;
+  }
+  const side = row.querySelector("td.d2h-code-side-linenumber");
+  if (side instanceof HTMLElement && !row.querySelector(".d2h-del")) return side;
+  const gutters = row.querySelectorAll(".cedar-diff-gutter");
+  if (gutters.length === 0) return null;
+  return gutters[gutters.length - 1] instanceof HTMLElement ? gutters[gutters.length - 1] : null;
+}
+
+/**
+ * @param {HTMLElement} codeRow
+ * @param {number} count
+ */
+function setGutterCommentCount(codeRow, count) {
+  const gutter = primaryGutterForRow(codeRow);
+  if (!(gutter instanceof HTMLElement)) return;
+  if (count <= 0) {
+    gutter.querySelector(".cedar-diff-comment-gutter-count")?.remove();
+    delete codeRow.dataset.cedarCommentCount;
+    return;
+  }
+  codeRow.dataset.cedarCommentCount = String(count);
+  let badge = gutter.querySelector(".cedar-diff-comment-gutter-count");
+  if (!(badge instanceof HTMLElement)) {
+    badge = document.createElement("span");
+    badge.className = "cedar-diff-comment-gutter-count";
+    gutter.appendChild(badge);
+  }
+  badge.textContent = String(count);
+  badge.setAttribute(
+    "aria-label",
+    `${count} review comment${count === 1 ? "" : "s"} — click line to show`
+  );
+}
+
+/**
+ * @param {HTMLElement} codeRow
+ * @param {HTMLElement | null} [threadRow]
+ * @param {HTMLElement | null} [host]
+ */
+function syncGutterBadgeForRow(codeRow, threadRow, host) {
+  const tr =
+    threadRow instanceof HTMLElement
+      ? threadRow
+      : codeRow.nextElementSibling instanceof HTMLElement &&
+          codeRow.nextElementSibling.classList.contains("cedar-diff-comment-thread-row")
+        ? codeRow.nextElementSibling
+        : null;
+  const count = Number(codeRow.dataset.cedarCommentCount) || (tr ? tr.querySelectorAll(".cedar-diff-comment-card").length : 0);
+  if (count > 0) setGutterCommentCount(codeRow, count);
+  const threadVisible =
+    tr instanceof HTMLElement &&
+    !tr.classList.contains("is-collapsed") &&
+    !tr.hidden &&
+    !tr.classList.contains("cedar-diff-comments-off");
+  codeRow.classList.toggle("cedar-diff-comments-collapsed", count > 0 && !threadVisible);
+  codeRow.classList.toggle("cedar-diff-gutter-count-visible", count > 0 && !threadVisible);
+}
+
+/**
+ * @param {HTMLElement} host
+ */
+function syncAllGutterBadges(host) {
+  host.querySelectorAll(".cedar-diff-comment-row.cedar-diff-line-commented").forEach((codeRow) => {
+    if (!(codeRow instanceof HTMLElement)) return;
+    syncGutterBadgeForRow(codeRow, null, host);
+  });
+}
+
 function setThreadRowExpanded(threadRow, expand) {
   const host = threadRow.closest(".cedar-gh-files-changed");
-  if (host instanceof HTMLElement && !commentsHostVisible(host)) return;
+  const globalOn = !(host instanceof HTMLElement) || commentsHostVisible(host);
 
-  const on =
-    expand === undefined ? threadRow.classList.contains("is-collapsed") : expand;
+  const hiddenNow =
+    threadRow.classList.contains("is-collapsed") ||
+    threadRow.hidden ||
+    threadRow.classList.contains("cedar-diff-comments-off");
+  const on = expand === undefined ? hiddenNow : expand;
   threadRow.classList.toggle("is-collapsed", !on);
+  threadRow.hidden = !on;
+  if (!globalOn) {
+    threadRow.classList.toggle("cedar-diff-comments-off", !on);
+  }
+  const codeRow = threadRow.previousElementSibling;
+  if (codeRow instanceof HTMLElement && codeRow.classList.contains("cedar-diff-comment-row")) {
+    syncGutterBadgeForRow(codeRow, threadRow, host instanceof HTMLElement ? host : null);
+  }
   const btn = threadRow.querySelector(".cedar-diff-comment-thread-toggle");
   const label = threadRow.querySelector(".cedar-diff-comment-thread-toggle-label");
   const count = threadRow.querySelectorAll(".cedar-diff-comment-card").length;
@@ -428,6 +516,8 @@ function paintCommentsForBody(body, comments, path) {
     threadRow.appendChild(td);
     threadRow.dataset.sourceRow = "1";
     row.insertAdjacentElement("afterend", threadRow);
+    setGutterCommentCount(row, items.length);
+    syncGutterBadgeForRow(row, threadRow, body.closest(".cedar-gh-files-changed"));
   });
 
   wireCommentThreads(body);
@@ -540,9 +630,13 @@ function wireDiffBodyComments(body) {
     const openFromRow = (ev) => {
       if (ev.target instanceof HTMLElement && ev.target.closest(".cedar-diff-add-comment")) return;
       const filesHost = row.closest(".cedar-gh-files-changed");
+      const globalCommentsOn =
+        filesHost instanceof HTMLElement && commentsHostVisible(filesHost);
+      const gutterCountOnly =
+        row.classList.contains("cedar-diff-gutter-count-visible") && !globalCommentsOn;
       if (
         filesHost instanceof HTMLElement &&
-        commentsHostVisible(filesHost) &&
+        (globalCommentsOn || gutterCountOnly) &&
         row.classList.contains("cedar-diff-line-commented") &&
         row.nextElementSibling?.classList.contains("cedar-diff-comment-thread-row") &&
         !(ev.target instanceof HTMLElement && ev.target.closest(".cedar-diff-add-comment"))
