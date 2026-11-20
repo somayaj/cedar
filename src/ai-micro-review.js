@@ -12,8 +12,13 @@ import { clipCodeExcerpt, resolveCommentLineInPatch } from "./patch-review.js";
  * @typedef {import('./review-engine.js').Finding} Finding
  */
 
-const PATCH_LIMIT = 28000;
-const PER_FILE_PATCH = 6000;
+const PATCH_LIMIT = 32000;
+const PER_FILE_PATCH = 9000;
+
+function maxSliceComments() {
+  const n = Number.parseInt(String(process.env.CEDAR_SLICE_REVIEW_MAX_COMMENTS ?? "18"), 10);
+  return Number.isFinite(n) ? Math.max(4, Math.min(n, 28)) : 18;
+}
 
 /**
  * @param {MicroPr} micro
@@ -41,23 +46,28 @@ export async function aiReviewMicroSlice(micro, ctx = {}) {
 
   const model = resolveCursorModel();
 
-  const system = `You write constructive GitHub pull-request review comments — the kind a helpful teammate leaves on a specific changed line.
-Tone: respectful, specific, actionable. Explain what you noticed in the diff, why it matters, and how to improve it. No audit jargon, no "finding", no process metrics.
+  const system = `You are a senior engineer doing a **granular, technical** line review on a PR slice.
+Use repo read/search tools when available to verify callers, types, error paths, and test coverage — then anchor comments to specific + lines in the provided patches.
+Tone: direct, precise, collegial. Name symbols, types, invariants, and failure modes. No fluff, no process metrics, no "finding" jargon.
+
 Output JSON only: { "comments": [ {
-  "ruleId": "internal topic slug only",
+  "ruleId": "short technical slug (e.g. null-deref, race, authz-gap)",
   "severity": "info"|"warning"|"blocker",
   "priority": "P0"|"P1"|"P2"|"P3",
   "tag": "security"|"boundary"|"architecture"|"quality"|"hygiene",
-  "message": "The review comment body (2–5 sentences, ready to paste on GitHub)",
+  "message": "2–6 sentences: what changed, concrete risk/bug, why it fails or scales badly, what to do (mention function/type names)",
   "filename": "exact files[].path",
-  "line": NEW-file line from + lines in the patch,
-  "suggestion": "optional fenced code or one-line fix"
+  "line": NEW-file line number from + lines in the patch (required),
+  "suggestion": "concrete fix: one line or small fenced snippet when applicable"
 } ] }
+
 Rules:
-- comment ONLY on + lines; every item needs filename + line.
-- message must quote or paraphrase the actual code change; never comment on slice size, file count, or tooling.
-- No checklists, no "consider reviewing", no generic praise. Max 12 comments per slice.
-- severity/priority reflect urgency for the author (blocker = must fix before merge).`;
+- ONLY comment on + lines present in files[]; every item needs exact filename + line.
+- Prefer **many specific** comments over few vague ones (up to ${maxSliceComments()}). Skip style-only nits unless they hide bugs.
+- Cover when relevant: correctness, edge cases, concurrency/async, error handling, API/typing contracts, security (injection/authz/secrets), perf hot paths, backward compatibility, missing tests for new behavior.
+- Each message must reference real code from the diff (identifiers, operators, or logic) — not slice metadata.
+- blocker = ship-stopper or high-likelihood production bug; warning = should fix; info = worthwhile hardening.
+- Include suggestion for blocker and warning when a local fix exists.`;
 
   const user = JSON.stringify({
     model_hint: model,
@@ -89,7 +99,7 @@ Rules:
   const patchByPath = new Map(micro.files.map((f) => [f.filename, f.patch ?? ""]));
 
   return items
-    .slice(0, 12)
+    .slice(0, maxSliceComments())
     .map((f) => {
       const filename = f.filename ? String(f.filename) : "";
       const patch = patchByPath.get(filename) ?? "";

@@ -1,4 +1,5 @@
 import { Agent } from "@cursor/sdk";
+import { resolveComposerReviewMode } from "./composer-review-mode.js";
 import { resolveCursorModel } from "./default-model.js";
 import { cursorBridgeChat } from "./cursor-bridge-client.js";
 import { cursorApiKey } from "./ai-credentials.js";
@@ -99,13 +100,15 @@ export async function composerReviewChat(opts) {
   const apiKey = cursorApiKey();
   if (!apiKey) throw new Error("CURSOR_API_KEY is not set");
 
+  const mode = opts.mode ?? resolveComposerReviewMode();
   const withJson = { ...opts, json: true };
 
   if (process.env.CEDAR_CURSOR_BRIDGE !== "false") {
     try {
       return await cursorBridgeChat({
         ...withJson,
-        mode: "plan",
+        mode,
+        reviewAgent: mode === "agent",
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

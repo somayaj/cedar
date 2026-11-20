@@ -478,6 +478,15 @@ async function startBackgroundCursorReviewIfNeeded(container) {
 
   const onEvent = (event) => {
     applyCursorBackgroundEvent(event, () => {
+      if (event.type === "cursor_macro") {
+        refreshReviewUi();
+        const results = document.getElementById("results");
+        if (results) {
+          finishReviewUiWithoutBackground(results);
+          repaintAllDiffComments(results);
+        }
+        return;
+      }
       if (event.type === "cursor_slice") {
         patchFindingsAndMetrics();
         repaintAllDiffComments(container);

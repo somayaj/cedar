@@ -16,6 +16,7 @@ import {
 } from "./default-model.js";
 import { activeAiProvider, hasAiProvider } from "./ai-chat.js";
 import { cursorApiKey, openRouterApiKey } from "./ai-credentials.js";
+import { resolveComposerReviewMode } from "./composer-review-mode.js";
 import { sliceReviewRequested } from "./slice-review-toggle.js";
 import { answerPrChatQuestion, prChatProviderLabel } from "./pr-chat.js";
 import { cedarAiDiagramMode } from "./diagram-visual-mode.js";
@@ -52,6 +53,7 @@ app.get("/api/health", (_req, res) => {
         : process.env.CEDAR_CURSOR_BRIDGE_URL ?? bridgeBaseUrl(),
     cursorBridgeManaged: isBridgeManaged(),
     cursorMode: process.env.CEDAR_CURSOR_MODE ?? "plan",
+    composerReviewMode: resolveComposerReviewMode(),
     partitionMode: process.env.CEDAR_PARTITION_MODE ?? "auto",
     aiDiagram: cedarAiDiagramMode(),
     breakoutCache: process.env.CEDAR_BREAKOUT_CACHE !== "false",

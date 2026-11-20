@@ -37,7 +37,7 @@ export function renderMacroReviewPanelHtml(macroReview) {
     .map(
       (f) => `<li class="cedar-review-comment-card cedar-glass-subtle px-3 py-2.5">
         <div class="mb-1.5 flex flex-wrap items-center gap-1.5">
-          <span class="cedar-badge cedar-badge-ok text-[9px]">Cursor</span>
+          <span class="cedar-badge cedar-badge-ok text-[9px]">Macro review</span>
           ${renderMacroFindingMeta(f)}
         </div>
         <p class="cedar-review-comment-body text-sm leading-relaxed text-zinc-200">${escapeHtml(f.message ?? "")}</p>
@@ -47,7 +47,7 @@ export function renderMacroReviewPanelHtml(macroReview) {
 
   const findingsBlock = findingCards
     ? `<details class="mt-4 group" open>
-        <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Cursor macro findings (${macroReview.findings.length})</summary>
+        <summary class="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-300">Macro review findings (${macroReview.findings.length})</summary>
         <ul class="mt-3 space-y-2">${findingCards}</ul>
       </details>`
     : "";
@@ -62,11 +62,10 @@ export function renderMacroReviewPanelHtml(macroReview) {
   return `<section class="cedar-glass-subtle cedar-macro-review mb-6 px-5 py-4" aria-labelledby="cedar-macro-review-heading">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Cursor · macro review (entire PR)</h2>
-        <p class="mt-1 text-[10px] text-zinc-500">PR-wide findings + one review comment · slice line comments are below</p>
+        <h2 id="cedar-macro-review-heading" class="text-sm font-semibold text-white">Macro review (entire PR)</h2>
+        <p class="mt-1 text-[10px] text-zinc-500">PR-wide themes · same threads appear inline on the diff (<span class="text-zinc-400">Macro review</span> on the first changed line). Slice line comments stay <span class="text-zinc-400">Cursor · Draft</span>.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <span class="cedar-badge cedar-badge-ok text-[9px]">Cursor</span>
         <span class="cedar-badge cedar-badge-muted text-[9px]">${escapeHtml(eventLabel)}</span>
         ${macroReview.priority ? `<span class="cedar-finding-priority text-[10px]">${escapeHtml(macroReview.priority)}</span>` : ""}
         ${

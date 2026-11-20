@@ -168,6 +168,7 @@ export async function warmCursorBridgeSession() {
  *   messages: { role: string, content: string }[],
  *   model?: string,
  *   mode?: "agent" | "ask" | "plan",
+ *   reviewAgent?: boolean,
  * }} opts
  */
 export async function cursorBridgeChat(opts) {
@@ -181,14 +182,21 @@ export async function cursorBridgeChat(opts) {
   const wantsJson = opts.json || /Return JSON only|JSON object/i.test(system);
   const mode = opts.mode ?? resolveCursorMode();
   const isQa = mode === "ask";
+  const reviewAgentLead =
+    opts.reviewAgent && mode === "agent" && wantsJson
+      ? `[Technical code review (Composer agent). You MAY use read/search tools to inspect callers, types, tests, and related modules in this repo.
+Do NOT create, edit, or delete files. Do NOT run destructive or mutating commands.
+Your ONLY output is raw JSON per SYSTEM INSTRUCTIONS — first character must be {. No markdown fences.]\n\n`
+      : "";
   const jsonOnly =
-    !isQa && mode !== "agent"
+    reviewAgentLead ||
+    (!isQa && mode !== "agent"
       ? wantsJson
         ? `[Plan mode — output raw JSON only: first character must be {. No prose, no fences. Do not edit files or run commands.]\n\n`
         : `[Plan mode — do not edit, create, or delete files, and do not run shell commands.]\n\n`
       : isQa
         ? "[Ask mode — answer questions only. Do not edit files or run commands.]\n\n"
-        : "";
+        : "");
 
   const prompt = system
     ? `${jsonOnly}SYSTEM INSTRUCTIONS:\n${system}\n\n---\n\n${dialogue}`

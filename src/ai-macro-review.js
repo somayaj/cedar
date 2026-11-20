@@ -41,22 +41,23 @@ export async function aiMacroPrReview(ctx) {
       };
     });
 
-  const system = `You write the **macro** (whole pull request) code review — one GitHub review comment for the entire PR.
-Micro review already has per-line comments per architectural slice; synthesize the big picture only.
+  const system = `You write the **macro** (whole PR) technical review — one GitHub review comment plus distilled PR-wide themes.
+Per-slice line review runs separately; synthesize **cross-cutting engineering risk** (not line-by-line repetition).
+Use read/search tools when available to validate architecture claims against the repo.
 Return JSON only:
 {
   "verdict": "approve" | "comment" | "request_changes",
   "priority": "P0" | "P1" | "P2" | "P3",
   "findings": [
-    { "ruleId": "macro/short-id", "tag": "security|architecture|quality|boundary|hygiene", "priority": "P0-P3", "message": "One PR-wide theme (2-3 sentences, no file paths required)" }
+    { "ruleId": "macro/short-id", "tag": "security|architecture|quality|boundary|hygiene", "priority": "P0-P3", "message": "Technical PR theme (2-4 sentences): concrete risk, affected slices/areas, mitigation or test strategy" }
   ],
-  "body": "Markdown for a single PR review comment: ## Summary, ## Architecture & scope, ## Risks & test gaps, ## Recommendation (3-8 short paragraphs, constructive teammate tone)"
+  "body": "Markdown: ## Summary, ## Architecture & coupling, ## Correctness & security risks, ## Test & rollout gaps, ## Recommendation (technical, specific)"
 }
 Rules:
-- findings: 3-8 PR-level themes (cross-slice risks, testing, rollout) — not duplicates of every micro line comment.
-- Refer to slices by name; do not repeat every micro comment verbatim — integrate themes.
-- Call out cross-boundary concerns, missing tests, rollout, and whether this is safe to merge.
-- No audit tables, no "finding" jargon, no file-count filler.`;
+- findings: 4–10 **technical** themes — coupling, invariants, auth/data boundaries, observability, migrations, perf, failure modes.
+- Name slices and subsystems; cite behavioral risks, not file counts.
+- Integrate patterns from micro_review_comments when present; do not paste every line comment.
+- No audit tables or generic praise.`;
 
   const user = JSON.stringify({
     model_hint: model,

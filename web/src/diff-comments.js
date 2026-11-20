@@ -2,7 +2,7 @@ import { collectCursorDraftCommentsForDiff } from "./cursor-diff-comments.js";
 
 export { collectCursorDraftCommentsForDiff };
 
-/** @typedef {{ id: number, path: string, line: number, side: string, body: string, html_url?: string, user?: string | null, created_at?: string, source?: "github" | "cursor", findingKey?: string }} ReviewComment */
+/** @typedef {{ id: number, path: string, line: number, side: string, body: string, html_url?: string, user?: string | null, created_at?: string, source?: "github" | "cursor" | "cursor-macro", findingKey?: string }} ReviewComment */
 
 /** @typedef {{ prUrl: string, token?: string, reviewComments?: ReviewComment[], data: { target?: { owner?: string, repo?: string, pr?: number }, pull?: { headSha?: string } } }} CedarSession */
 
@@ -259,17 +259,24 @@ function commentsByAnchor(comments) {
 function renderCommentThreadSlide(items) {
   const cards = items
     .map((c) => {
-      const isCursor = c.source === "cursor";
-      const who = isCursor
-        ? `<span class="cedar-diff-comment-card-user"><span class="cedar-badge cedar-badge-ok text-[9px]">Cursor</span> Draft</span>`
-        : c.user
-          ? `<span class="cedar-diff-comment-card-user">@${escapeHtml(c.user)}</span>`
-          : `<span class="cedar-diff-comment-card-user">Reviewer</span>`;
-      const when = !isCursor && c.created_at ? escapeHtml(new Date(c.created_at).toLocaleString()) : "";
+      const isMacro = c.source === "cursor-macro";
+      const isCursorDraft = c.source === "cursor" || isMacro;
+      const who = isMacro
+        ? `<span class="cedar-diff-comment-card-user"><span class="cedar-badge cedar-badge-ok text-[9px]">Macro review</span></span>`
+        : isCursorDraft
+          ? `<span class="cedar-diff-comment-card-user"><span class="cedar-badge cedar-badge-ok text-[9px]">Cursor</span> Draft</span>`
+          : c.user
+            ? `<span class="cedar-diff-comment-card-user">@${escapeHtml(c.user)}</span>`
+            : `<span class="cedar-diff-comment-card-user">Reviewer</span>`;
+      const when = !isCursorDraft && c.created_at ? escapeHtml(new Date(c.created_at).toLocaleString()) : "";
       const link = c.html_url
         ? `<a class="cedar-diff-comment-thread-link" href="${escapeHtml(c.html_url)}" target="_blank" rel="noreferrer">Open on GitHub</a>`
         : "";
-      const cardClass = isCursor ? "cedar-diff-comment-card cedar-diff-comment-card--cursor" : "cedar-diff-comment-card";
+      const cardClass = isMacro
+        ? "cedar-diff-comment-card cedar-diff-comment-card--cursor cedar-diff-comment-card--cursor-macro"
+        : isCursorDraft
+          ? "cedar-diff-comment-card cedar-diff-comment-card--cursor"
+          : "cedar-diff-comment-card";
       return `<article class="${cardClass}">
         <header class="cedar-diff-comment-card-head">
           ${who}
