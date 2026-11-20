@@ -15,6 +15,7 @@ import {
   resolveCursorModel,
 } from "./default-model.js";
 import { activeAiProvider, hasAiProvider } from "./ai-chat.js";
+import { cursorApiKey, openRouterApiKey } from "./ai-credentials.js";
 import { answerPrChatQuestion, prChatProviderLabel } from "./pr-chat.js";
 import { cedarAiDiagramMode } from "./diagram-visual-mode.js";
 import { ensureCursorBridge, bridgeBaseUrl, isBridgeManaged } from "./cursor-bridge-spawn.js";
@@ -34,8 +35,8 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     hasToken: Boolean(process.env.GITHUB_TOKEN),
-    hasCursor: Boolean(process.env.CURSOR_API_KEY),
-    hasOpenRouter: Boolean(process.env.OPENROUTER_API_KEY),
+    hasCursor: Boolean(cursorApiKey()),
+    hasOpenRouter: Boolean(openRouterApiKey()),
     aiProvider: activeAiProvider(),
     prChat: hasAiProvider(),
     cursorBridge:

@@ -1,4 +1,5 @@
 import { resolveOpenRouterModel } from "./default-model.js";
+import { openRouterApiKey } from "./ai-credentials.js";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -12,7 +13,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
  * }} opts
  */
 export async function openRouterChat(opts) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = openRouterApiKey();
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set");
   }

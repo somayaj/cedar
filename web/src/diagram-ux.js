@@ -10,6 +10,79 @@ const umlFitByWrap = new WeakMap();
 /** @type {WeakMap<HTMLElement, number>} */
 const umlZoomByWrap = new WeakMap();
 
+/** Match Overview · virtual micro-PRs (cytoscape toolbar + wheel). */
+const DIAGRAM_ZOOM_STEP = 1.1;
+const DIAGRAM_ZOOM_MIN = 0.2;
+const DIAGRAM_ZOOM_MAX = 2.25;
+
+/**
+ * @param {number} z
+ */
+function clampDiagramZoom(z) {
+  return Math.min(DIAGRAM_ZOOM_MAX, Math.max(DIAGRAM_ZOOM_MIN, z));
+}
+
+/**
+ * @param {HTMLElement} wrap
+ * @param {"in" | "out"} dir
+ */
+function nudgeDiagramZoom(wrap, dir) {
+  const current = umlZoomByWrap.get(wrap) ?? 1;
+  const next =
+    dir === "in" ? current * DIAGRAM_ZOOM_STEP : current / DIAGRAM_ZOOM_STEP;
+  umlZoomByWrap.set(wrap, clampDiagramZoom(next));
+  umlFitByWrap.get(wrap)?.();
+}
+
+/**
+ * @param {HTMLElement} wrap
+ */
+function fitDiagramZoomToStage(wrap) {
+  const stage = wrap.querySelector(".diagram-complete-layout");
+  const svg = wrap.querySelector("svg");
+  if (!(stage instanceof HTMLElement) || !(svg instanceof SVGSVGElement)) {
+    umlZoomByWrap.set(wrap, 1);
+    umlFitByWrap.get(wrap)?.();
+    return;
+  }
+  const vb = svg.viewBox?.baseVal;
+  const naturalW = vb?.width > 0 ? vb.width : svg.width?.baseVal?.value || 0;
+  const naturalH = vb?.height > 0 ? vb.height : svg.height?.baseVal?.value || 0;
+  if (naturalW < 8 || naturalH < 8) {
+    umlZoomByWrap.set(wrap, 1);
+  } else {
+    const pad = 32;
+    const zoomW = (Math.max(stage.clientWidth - pad, 200)) / naturalW;
+    const zoomH = (Math.max(stage.clientHeight - pad, 120)) / naturalH;
+    umlZoomByWrap.set(wrap, clampDiagramZoom(Math.min(zoomW, zoomH, DIAGRAM_ZOOM_MAX)));
+  }
+  umlFitByWrap.get(wrap)?.();
+}
+
+/** @type {WeakSet<HTMLElement>} */
+const wheelZoomByWrap = new WeakSet();
+
+/**
+ * @param {HTMLElement} wrap
+ * @param {HTMLElement} stage
+ */
+function wireDiagramWheelZoom(wrap, stage) {
+  if (wheelZoomByWrap.has(wrap)) return;
+  wheelZoomByWrap.add(wrap);
+  stage.addEventListener(
+    "wheel",
+    (e) => {
+      if (!umlFitByWrap.has(wrap)) return;
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 1 / DIAGRAM_ZOOM_STEP : DIAGRAM_ZOOM_STEP;
+      const next = clampDiagramZoom((umlZoomByWrap.get(wrap) ?? 1) * factor);
+      umlZoomByWrap.set(wrap, next);
+      umlFitByWrap.get(wrap)?.();
+    },
+    { passive: false }
+  );
+}
+
 async function ensureMermaid() {
   if (mermaidBooted && mermaidApi) return mermaidApi;
   const mod = await import("mermaid");
@@ -382,6 +455,8 @@ function mountLayoutMermaidScrollable(wrap, pre) {
     ro.observe(stage);
     resizeObserverByWrap.set(wrap, ro);
   }
+
+  wireDiagramWheelZoom(wrap, stage);
 }
 
 /**
@@ -518,18 +593,9 @@ function wireDiagramToolbars(root) {
         }
 
         if (umlFit) {
-          if (action === "in") {
-            const next = Math.min((umlZoomByWrap.get(wrap) ?? 1) * 1.22, 4);
-            umlZoomByWrap.set(wrap, next);
-            umlFit();
-          } else if (action === "out") {
-            const next = Math.max((umlZoomByWrap.get(wrap) ?? 1) / 1.22, 0.45);
-            umlZoomByWrap.set(wrap, next);
-            umlFit();
-          } else if (action === "reset") {
-            umlZoomByWrap.set(wrap, 1);
-            umlFit();
-          }
+          if (action === "in") nudgeDiagramZoom(wrap, "in");
+          else if (action === "out") nudgeDiagramZoom(wrap, "out");
+          else if (action === "reset") fitDiagramZoomToStage(wrap);
           return;
         }
         if (!pz) {

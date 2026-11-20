@@ -147,7 +147,13 @@ async function refreshHealth() {
     const res = await fetch("/api/health");
     const data = await res.json();
     initDiffFontFromServer(data.diffFont);
-    if (data.hasToken && (data.hasCursor || data.hasOpenRouter)) {
+    if (data.hasToken && data.aiProvider === "cursor") {
+      pill.textContent = "Cursor ready";
+      pill.className = "cedar-badge cedar-badge-ok";
+    } else if (data.hasToken && data.aiProvider === "openrouter") {
+      pill.textContent = "OpenRouter";
+      pill.className = "cedar-badge cedar-badge-ok";
+    } else if (data.hasToken && (data.hasCursor || data.hasOpenRouter)) {
       pill.textContent = "Ready";
       pill.className = "cedar-badge cedar-badge-ok";
     } else if (data.hasToken) {

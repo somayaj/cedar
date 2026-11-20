@@ -319,6 +319,11 @@
   .cedar-complete-layout-views .cedar-layout-view .diagram-overview-read.diagram-stage-canvas {
     overflow: auto;
     overscroll-behavior: contain;
+    cursor: grab;
+  }
+
+  .cedar-complete-layout-views .cedar-layout-view .diagram-overview-read.diagram-stage-canvas:active {
+    cursor: grabbing;
   }
 
   .cedar-complete-layout-views .cedar-layout-view .cedar-mermaid-source,

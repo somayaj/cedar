@@ -1,4 +1,5 @@
 import { aiChat, activeAiProvider, hasAiProvider } from "./ai-chat.js";
+import { cursorApiKey } from "./ai-credentials.js";
 import { cursorBridgeChat } from "./cursor-bridge-client.js";
 import { prChatContextFromReport } from "./pr-chat-context.js";
 
@@ -51,7 +52,7 @@ export async function answerPrChatQuestion(messages, context) {
     maxTokens: 1400,
   };
 
-  if (process.env.CURSOR_API_KEY && process.env.CEDAR_CURSOR_BRIDGE !== "false") {
+  if (cursorApiKey() && process.env.CEDAR_CURSOR_BRIDGE !== "false") {
     return await cursorBridgeChat({ ...payload, mode: "ask" });
   }
 

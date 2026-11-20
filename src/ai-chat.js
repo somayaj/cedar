@@ -1,25 +1,25 @@
 import { cursorChat } from "./cursor-llm.js";
 import { openRouterChat, parseJsonFromModel } from "./openrouter.js";
 import { resolveAiModel } from "./default-model.js";
+import { cursorApiKey, openRouterApiKey, resolveAiProviderName } from "./ai-credentials.js";
 
 export { parseJsonFromModel, resolveAiModel };
 
 export function hasAiProvider() {
-  return Boolean(process.env.CURSOR_API_KEY) || Boolean(process.env.OPENROUTER_API_KEY);
+  return resolveAiProviderName() !== null;
 }
 
 export function activeAiProvider() {
-  if (process.env.CURSOR_API_KEY) return "cursor";
-  if (process.env.OPENROUTER_API_KEY) return "openrouter";
-  return null;
+  return resolveAiProviderName();
 }
 
 /**
  * @param {Parameters<typeof openRouterChat>[0]} opts
  */
 export async function aiChat(opts) {
+  const provider = resolveAiProviderName();
   const withJson =
-    opts.json && process.env.CURSOR_API_KEY
+    opts.json && provider === "cursor"
       ? {
           ...opts,
           messages: opts.messages.map((m, i) =>
@@ -33,9 +33,18 @@ export async function aiChat(opts) {
         }
       : opts;
 
-  if (process.env.CURSOR_API_KEY) return cursorChat(withJson);
-  if (process.env.OPENROUTER_API_KEY) return openRouterChat(opts);
-  throw new Error("Set CURSOR_API_KEY (Composer) or OPENROUTER_API_KEY");
+  if (provider === "cursor") return cursorChat(withJson);
+  if (provider === "openrouter") return openRouterChat(opts);
+  if (cursorApiKey() || openRouterApiKey()) {
+    const forced = String(process.env.CEDAR_AI_PROVIDER ?? "").trim().toLowerCase();
+    if (forced === "cursor") {
+      throw new Error("CEDAR_AI_PROVIDER=cursor but CURSOR_API_KEY is missing or empty");
+    }
+    if (forced === "openrouter") {
+      throw new Error("CEDAR_AI_PROVIDER=openrouter but OPENROUTER_API_KEY is missing or empty");
+    }
+  }
+  throw new Error("Set CURSOR_API_KEY (Cursor Integrations) or OPENROUTER_API_KEY");
 }
 
 const JSON_ONLY_INSTRUCTION =

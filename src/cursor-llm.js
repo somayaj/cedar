@@ -1,6 +1,7 @@
 import { Agent } from "@cursor/sdk";
 import { resolveCursorModel } from "./default-model.js";
 import { cursorBridgeChat } from "./cursor-bridge-client.js";
+import { cursorApiKey } from "./ai-credentials.js";
 
 /**
  * @param {{
@@ -9,7 +10,7 @@ import { cursorBridgeChat } from "./cursor-bridge-client.js";
  * }} opts
  */
 export async function cursorChat(opts) {
-  const apiKey = process.env.CURSOR_API_KEY;
+  const apiKey = cursorApiKey();
   if (!apiKey) {
     throw new Error("CURSOR_API_KEY is not set");
   }
@@ -35,7 +36,7 @@ export async function cursorChat(opts) {
  * @param {Parameters<typeof cursorChat>[0]} opts
  */
 async function cursorChatOneShot(opts) {
-  const apiKey = process.env.CURSOR_API_KEY;
+  const apiKey = cursorApiKey();
   if (!apiKey) {
     throw new Error("CURSOR_API_KEY is not set");
   }
