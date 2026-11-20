@@ -1,6 +1,7 @@
 import cytoscape from "cytoscape";
 import dagre from "cytoscape-dagre";
 import { applyMermaidZoomByHostId, DIAGRAM_FIT_PADDING, DIAGRAM_ZOOM_STEP } from "./diagram-ux.js";
+import { REVIEW_STATUS_COLORS } from "../../src/diagram-colors.js";
 
 cytoscape.use(dagre);
 
@@ -61,6 +62,15 @@ const CEDAR_STYLE = [
       "border-color": "#737373",
     },
   },
+  ...Object.entries(REVIEW_STATUS_COLORS).map(([status, c]) => ({
+    selector: `node[reviewStatus = "${status}"]`,
+    style: {
+      color: c.text,
+      "background-color": c.fill,
+      "border-color": c.border,
+      "border-width": 2,
+    },
+  })),
   {
     selector: "node[highlight]",
     style: {
@@ -105,8 +115,9 @@ const CEDAR_STYLE = [
 
 /**
  * @param {object} graph
+ * @param {Map<string, string> | undefined} statusByLayerId
  */
-function toElements(graph) {
+function toElements(graph, statusByLayerId) {
   const part = graph.overview;
   if (!part?.nodes?.length) return [];
 
@@ -116,14 +127,21 @@ function toElements(graph) {
 
   const nodes = part.nodes
     .filter((n) => n.type === "pr" || n.type === "slice")
-    .map((n) => ({
-      data: {
-        id: n.id,
-        label: n.label,
-        type: n.type,
-        ...(n.highlight ? { highlight: true } : {}),
-      },
-    }));
+    .map((n) => {
+      const reviewStatus =
+        n.type === "slice" && n.layerId && statusByLayerId?.get(n.layerId)
+          ? statusByLayerId.get(n.layerId)
+          : undefined;
+      return {
+        data: {
+          id: n.id,
+          label: n.label,
+          type: n.type,
+          ...(reviewStatus ? { reviewStatus } : {}),
+          ...(n.highlight ? { highlight: true } : {}),
+        },
+      };
+    });
 
   const edges = (part.edges ?? [])
     .filter((e) => sliceNodeIds.has(e.source) && sliceNodeIds.has(e.target))
@@ -170,14 +188,15 @@ function wireCyResize(cy, container) {
 /**
  * @param {HTMLElement} container
  * @param {object} graph
+ * @param {Map<string, string> | undefined} statusByLayerId
  */
-function mountCy(container, graph) {
+function mountCy(container, graph, statusByLayerId) {
   if (!container.id) container.id = "cedar-cy-slices";
   const key = container.id;
   const prev = instances.get(key);
   if (prev) prev.destroy();
 
-  const elements = toElements(graph);
+  const elements = toElements(graph, statusByLayerId);
   if (!elements.length) {
     container.innerHTML =
       '<p class="p-6 text-center text-sm text-zinc-500">No slices to show.</p>';
@@ -257,11 +276,16 @@ export function wireArchitectureZoomControls(root) {
   });
 }
 
-export function mountArchitectureGraphs(root, diagramGraph) {
+/**
+ * @param {ParentNode} root
+ * @param {object} diagramGraph
+ * @param {Map<string, string> | undefined} [statusByLayerId]
+ */
+export function mountArchitectureGraphs(root, diagramGraph, statusByLayerId) {
   if (!diagramGraph?.overview) return false;
 
   const host = root.querySelector("#cedar-cy-slices");
-  const ok = host ? mountCy(host, diagramGraph) !== null : false;
+  const ok = host ? mountCy(host, diagramGraph, statusByLayerId) !== null : false;
   wireArchitectureZoomControls(root);
   return ok;
 }

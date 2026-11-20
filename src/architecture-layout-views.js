@@ -173,7 +173,7 @@ function buildComponentsClassDiagram(layers, registry, sliceNums) {
 
   if (classIds.size) {
     lines.push(
-      "  classDef cedarType fill:#141414,stroke:#737373,stroke-width:1.5px,color:#f5f5f5,font-weight:500"
+      "  classDef cedarType fill:#1a1a2e,stroke:#818cf8,stroke-width:1.5px,color:#e0e7ff,font-weight:500"
     );
     for (const id of classIds) {
       lines.push(`  class ${id} cedarType`);
@@ -203,6 +203,17 @@ function buildRequestFlowDiagram(layers, active, pull, target) {
     `  pr(("${prLabel}")):::pr`,
   ];
 
+  const layerClassNames = new Map();
+  for (const layer of layers) {
+    const key = normalizeSliceId(layer.id);
+    const accent = layerAccent(key);
+    const className = `cedar_${safeIdent(key)}`;
+    layerClassNames.set(key, className);
+    lines.push(
+      `  classDef ${className} fill:${accent.fill},stroke:${accent.stroke},stroke-width:1.5px,color:${accent.text}`
+    );
+  }
+
   const nodeId = new Map();
   const register = (id, label, kind = "layer") => {
     const key = normalizeSliceId(id);
@@ -211,7 +222,9 @@ function buildRequestFlowDiagram(layers, active, pull, target) {
     nodeId.set(key, { nid, kind });
     const labelSafe = mermaidSafeText(label);
     const shape = kind === "ops" ? `[${labelSafe}]` : `["${labelSafe}"]`;
-    lines.push(`  ${nid}${shape}:::${kind}`);
+    const layerClass = layerClassNames.get(key);
+    const suffix = layerClass && kind === "layer" ? `:::${layerClass}` : kind === "ops" ? ":::ops" : "";
+    lines.push(`  ${nid}${shape}${suffix}`);
   };
 
   for (const layer of layers) {

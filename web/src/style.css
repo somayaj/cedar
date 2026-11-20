@@ -389,6 +389,15 @@
     @apply border-white/20 bg-white/[0.06];
   }
 
+  .cedar-architecture-summary {
+    border-left: 3px solid rgb(96 165 250 / 0.55);
+    background: linear-gradient(90deg, rgb(30 58 138 / 0.12) 0%, transparent 45%);
+  }
+
+  .cedar-diagram-slice-num {
+    font-weight: 600;
+  }
+
   .cedar-layer-chip-label {
     @apply text-[11px] font-medium text-zinc-100;
   }

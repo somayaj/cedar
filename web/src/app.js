@@ -2,6 +2,7 @@ import { cedarMarkSvg } from "./cedar-logo.js";
 import { architectureIconSvg, slicesIconSvg } from "./cedar-icons.js";
 import { mountArchitectureGraphs, wireArchitectureZoomControls } from "./architecture-canvas.js";
 import { buildDiagramGraph } from "../../src/diagram-graph.js";
+import { layerAccent, sliceIndexColor } from "../../src/diagram-colors.js";
 import { buildArchitectureDiagramMermaid } from "../../src/architecture-diagram.js";
 import { buildCompleteLayoutViews } from "../../src/architecture-layout-views.js";
 import {
@@ -290,7 +291,7 @@ function renderDiagramSliceBadges(slices) {
         title="${escapeHtml(title)}"
         aria-label="Slice ${n}: ${escapeHtml(classHint || r.componentId)}">
         <span class="cedar-diagram-slice-dot h-2.5 w-2.5 rounded-full ${dot}" aria-hidden="true"></span>
-        <span class="cedar-diagram-slice-num tabular-nums">#${n}</span>
+        <span class="cedar-diagram-slice-num tabular-nums" style="color:${sliceIndexColor(n)}">#${n}</span>
       </button>`;
     })
     .join("");
@@ -335,10 +336,10 @@ function renderPrLayerStack(activeSliceIds) {
   const layers = ARCHITECTURE_LAYER_STACK.filter((l) => active.has(l.id));
   if (!layers.length) return "";
   const items = layers
-    .map(
-      (layer) =>
-        `<li class="cedar-layer-chip is-active"><span class="cedar-layer-chip-label">${escapeHtml(layer.label)}</span><span class="cedar-layer-chip-hint">${escapeHtml(layer.hint)}</span></li>`
-    )
+    .map((layer) => {
+      const accent = layerAccent(layer.id);
+      return `<li class="cedar-layer-chip is-active" style="border-color:${accent.stroke};background:linear-gradient(135deg, ${accent.fill}88 0%, #0a0a0a44 100%)"><span class="cedar-layer-chip-label" style="color:${accent.text}">${escapeHtml(layer.label)}</span><span class="cedar-layer-chip-hint">${escapeHtml(layer.hint)}</span></li>`;
+    })
     .join("");
   return `<div class="cedar-layer-stack mt-4" aria-label="${escapeHtml(ARCHITECTURE_MODEL_LABEL)}">
     <p class="cedar-label mb-2">Layers in this PR</p>
@@ -1082,7 +1083,7 @@ function renderResults(container, data) {
           }>
             ${
               breakouts?.architectureSummary
-                ? `<section class="cedar-glass-subtle px-5 py-4">
+                ? `<section class="cedar-glass-subtle cedar-architecture-summary px-5 py-4">
             <p class="cedar-label">Summary · ${escapeHtml(String(breakouts.strategy ?? partition?.mode ?? ""))}</p>
             <p class="mt-2 text-sm leading-relaxed text-zinc-400">${escapeHtml(breakouts.architectureSummary)}</p>
           </section>`
@@ -1242,7 +1243,10 @@ function renderResults(container, data) {
       );
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const drew = mountArchitectureGraphs(container, graph);
+        const statusByLayerId = new Map(
+          activeSlicesForDiagram.map((r) => [normalizeSliceId(r.componentId), r.status])
+        );
+        const drew = mountArchitectureGraphs(container, graph, statusByLayerId);
         if (!drew) showToast("Architecture diagram could not render.", "error");
       });
     });
