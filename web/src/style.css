@@ -615,7 +615,7 @@
   }
 
   .cedar-review-layout {
-    --cedar-sidebar-width: 21rem;
+    --cedar-sidebar-width: 25rem;
     @apply flex w-full min-w-0 max-w-none flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-0;
   }
 
@@ -626,16 +626,18 @@
   }
 
   .cedar-review-sidebar {
-    @apply min-w-0 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto;
+    @apply min-w-0 shrink-0 lg:sticky lg:top-20 lg:self-stretch;
     width: 100%;
   }
 
   @media (min-width: 1024px) {
     .cedar-review-sidebar {
-      @apply flex flex-col;
+      @apply flex min-h-0 flex-col;
       width: var(--cedar-sidebar-width);
-      min-width: 12rem;
-      max-width: min(26rem, 34vw);
+      min-width: 17.5rem;
+      max-width: min(35rem, 44vw);
+      max-height: none;
+      overflow: visible;
     }
   }
 
@@ -823,18 +825,24 @@
   }
 
   .cedar-pr-chat-card {
-    @apply flex min-h-0 flex-col lg:min-h-[18rem] lg:flex-1;
+    @apply flex min-h-0 flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden;
+  }
+
+  .cedar-pr-chat-form {
+    @apply flex shrink-0 flex-col;
   }
 
   .cedar-pr-chat-log {
-    @apply flex min-h-[10rem] flex-1 flex-col gap-2 overflow-y-auto rounded-xl border border-white/[0.06] bg-black/40 p-2.5;
+    @apply flex flex-1 flex-col gap-2 overflow-y-auto rounded-xl border border-white/[0.06] bg-black/40 p-2.5;
+    min-height: 10rem;
     max-height: min(36rem, 56vh);
   }
 
   @media (min-width: 1024px) {
     .cedar-pr-chat-log {
-      min-height: 14rem;
-      max-height: min(42rem, calc(100vh - 20rem));
+      min-height: 20rem;
+      max-height: none;
+      flex: 1 1 auto;
     }
   }
 
@@ -859,7 +867,7 @@
   }
 
   .cedar-pr-chat-input {
-    @apply w-full min-h-[5.5rem] resize-y rounded-xl border border-white/[0.08] bg-black/50 px-3 py-2.5 text-xs leading-relaxed text-zinc-200 placeholder:text-zinc-600 focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10;
+    @apply w-full min-h-[7.5rem] resize-y rounded-xl border border-white/[0.08] bg-black/50 px-3 py-2.5 text-xs leading-relaxed text-zinc-200 placeholder:text-zinc-600 focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10;
   }
 
   .cedar-pr-chat-card .cedar-pr-chat-hint {

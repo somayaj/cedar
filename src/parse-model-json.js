@@ -1,4 +1,27 @@
 /**
+ * Composer sometimes emits `\d`-style escapes JSON does not allow — double the backslash.
+ * @param {string} text
+ */
+export function repairInvalidJsonEscapes(text) {
+  return text.replace(/\\(?!["\\/bfnrtu]|u[0-9a-fA-F]{4})/g, "\\\\");
+}
+
+/**
+ * @param {string} raw
+ */
+function tryParseJson(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch (firstErr) {
+    try {
+      return JSON.parse(repairInvalidJsonEscapes(raw));
+    } catch {
+      throw firstErr;
+    }
+  }
+}
+
+/**
  * Extract a JSON object/array from model output (prose, fences, or truncated).
  * @param {string} content
  */
@@ -13,14 +36,14 @@ export function parseJsonFromModel(content) {
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) {
     try {
-      return JSON.parse(fence[1].trim());
+      return tryParseJson(fence[1].trim());
     } catch (err) {
       errors.push(fenceErr(err));
     }
   }
 
   try {
-    return JSON.parse(trimmed);
+    return tryParseJson(trimmed);
   } catch (err) {
     errors.push(fenceErr(err));
   }
@@ -34,7 +57,7 @@ export function parseJsonFromModel(content) {
     const slice = extractBalancedJson(trimmed, start);
     if (slice) {
       try {
-        return JSON.parse(slice);
+        return tryParseJson(slice);
       } catch (err) {
         errors.push(fenceErr(err));
       }

@@ -899,9 +899,9 @@ function wireSliceKeyboardNav(root) {
 }
 
 const SIDEBAR_WIDTH_KEY = "cedar.reviewSidebarWidthPx";
-const SIDEBAR_WIDTH_DEFAULT = 200;
-const SIDEBAR_WIDTH_MIN = 160;
-const SIDEBAR_WIDTH_MAX = 360;
+const SIDEBAR_WIDTH_DEFAULT = 400;
+const SIDEBAR_WIDTH_MIN = 280;
+const SIDEBAR_WIDTH_MAX = 560;
 
 const SLICE_RAIL_WIDTH_KEY = "cedar.sliceRailWidthPx";
 const SLICE_RAIL_DEFAULT = 148;
@@ -1443,7 +1443,7 @@ function renderResults(container, data) {
     ${macroReviewHtml}
 
     <div class="cedar-review-layout">
-      <aside class="cedar-review-sidebar space-y-2 lg:sticky lg:top-20 lg:self-start">
+      <aside class="cedar-review-sidebar space-y-2 lg:sticky lg:top-20 lg:self-stretch">
         <div class="cedar-review-rail-card">
           <p class="cedar-rail-label">Pipeline</p>
           <ul class="mt-2 space-y-2">${processList}</ul>
@@ -1459,7 +1459,7 @@ function renderResults(container, data) {
           <div class="cedar-pr-chat-log mt-2" id="cedar-pr-chat-log" aria-live="polite" aria-relevant="additions"></div>
           <form class="cedar-pr-chat-form mt-2">
             <label class="sr-only" for="cedar-pr-chat-input">Question about this pull request</label>
-            <textarea id="cedar-pr-chat-input" class="cedar-pr-chat-input" rows="5" maxlength="2000"
+            <textarea id="cedar-pr-chat-input" class="cedar-pr-chat-input" rows="7" maxlength="2000"
               placeholder="Architecture, slices, blockers, what changed…"></textarea>
             <button type="submit" class="cedar-pr-chat-send cedar-btn-secondary mt-2 w-full text-xs">Send</button>
           </form>
