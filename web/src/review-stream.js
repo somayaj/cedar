@@ -1,3 +1,5 @@
+import { applyReviewProgressFromPhaseEvent } from "./review-progress-ui.js";
+
 /**
  * @typedef {Record<string, unknown>} ReviewStreamEvent
  */
@@ -9,6 +11,7 @@
  */
 export function applyReviewStreamEvent(event, statusEl, logEl) {
   if (!event || typeof event !== "object") return;
+  applyReviewProgressFromPhaseEvent(/** @type {{ type?: string, id?: string, label?: string, status?: string, detail?: string }} */ (event));
   if (event.type === "phase" && statusEl) {
     const detail = event.detail ? ` · ${event.detail}` : "";
     const prefix =
@@ -17,6 +20,9 @@ export function applyReviewStreamEvent(event, statusEl, logEl) {
   }
   if (event.type === "activity" && statusEl && event.text) {
     statusEl.textContent = String(event.text);
+  }
+  if (event.type === "cursor_background" && statusEl) {
+    statusEl.textContent = String(event.text ?? "Cursor review running in background…");
   }
   if (logEl && (event.type === "phase" || event.type === "activity")) {
     const line = document.createElement("li");

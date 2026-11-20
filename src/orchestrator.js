@@ -34,6 +34,7 @@ import { breakoutCacheKey, readBreakoutCache, writeBreakoutCache } from "./break
 import { resolveAiModel } from "./default-model.js";
 import { emitPhase, emitReviewProgress } from "./review-progress.js";
 import { buildCursorReviewSummary, summarizeCursorSliceReview } from "./cursor-review-summary.js";
+import { backgroundCursorReviewEnabled } from "./cursor-review-background.js";
 import { isCodeReviewFinding } from "./finding-meta.js";
 import {
   alignMicroPrsToPrArchitecture,
@@ -77,6 +78,10 @@ export async function runPrReviewPipeline(opts) {
 
   const useAiBreakouts = resolvePartitionMode(opts.partitionMode) === "ai";
   const useAiReview = sliceReviewRequested(opts.useAiReview);
+  const deferCursorAi =
+    opts.deferCursorAi ??
+    (useAiReview && sliceReviewAiAvailable() && backgroundCursorReviewEnabled());
+  const cursorReviewPending = Boolean(deferCursorAi && useAiReview && sliceReviewAiAvailable());
 
   /** @type {import('./ai-breakouts.js').AiBreakoutPlan | null} */
   let breakoutPlan = null;
@@ -209,6 +214,7 @@ export async function runPrReviewPipeline(opts) {
     runMicroReviewPass(ordered, {
       multiBoundaryFiles,
       useAiReview,
+      deferCursorAi,
       breakoutPlan,
       postMicro: Boolean(opts.postMicro),
       octokit,
@@ -233,7 +239,11 @@ export async function runPrReviewPipeline(opts) {
 
   /** @type {import('./ai-macro-review.js').ReturnType<typeof aiMacroPrReview> extends Promise<infer T> ? T : never} */
   let macroReview = null;
-  if (useAiReview && sliceReviewAiAvailable()) {
+  if (cursorReviewPending) {
+    phase("cursor-slices", "Cursor · slice review", "skipped", "Queued — runs in background on load");
+    phase("macro", "Cursor · macro review (entire PR)", "skipped", "Queued — after slice review");
+  }
+  if (useAiReview && sliceReviewAiAvailable() && !deferCursorAi) {
     phase("macro", "Cursor · macro review (entire PR)", "running");
     try {
       macroReview = await aiMacroPrReview({
@@ -408,6 +418,7 @@ export async function runPrReviewPipeline(opts) {
     microResults,
     macroReview,
     cursorReviewSummary,
+    cursorReviewPending,
     gate,
     composite,
     outputMarkdown,
@@ -458,14 +469,23 @@ async function runMicroReviewPass(ordered, ctx) {
   const reviewableTotal = reviewable.length;
   let slicePassIndex = 0;
 
-  if (cursorEnabled && reviewableTotal > 0) {
+  if (cursorEnabled && !ctx.deferCursorAi && reviewableTotal > 0) {
     emitPhase("cursor-slices", "Cursor · slice review", "running", `${reviewableTotal} slice(s)`);
   }
 
   for (const micro of ordered) {
     let result = reviewMicroPr(micro, { multiBoundaryFiles: ctx.multiBoundaryFiles });
 
-    if (cursorEnabled && !aiSliceReviewStopped && micro.files.length) {
+    if (cursorEnabled && ctx.deferCursorAi && micro.files.length && result.status !== "skipped") {
+      result = {
+        ...result,
+        cursorReview: {
+          source: "cursor",
+          count: 0,
+          status: "pending",
+        },
+      };
+    } else if (cursorEnabled && !ctx.deferCursorAi && !aiSliceReviewStopped && micro.files.length) {
       slicePassIndex += 1;
       const sliceLabel = `${micro.componentName} (${slicePassIndex}/${reviewableTotal})`;
       emitReviewProgress({
@@ -574,7 +594,7 @@ async function runMicroReviewPass(ordered, ctx) {
     }
   }
 
-  if (cursorEnabled && reviewableTotal > 0) {
+  if (cursorEnabled && !ctx.deferCursorAi && reviewableTotal > 0) {
     const stats = summarizeCursorSliceReview(microResults);
     const detail = `${stats.total} finding(s) · ${stats.slicesWithFindings}/${reviewableTotal} slices`;
     emitPhase(

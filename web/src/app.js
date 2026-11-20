@@ -21,6 +21,13 @@ import {
   refitPanZoomDiagrams,
 } from "./diagram-ux.js";
 import { applyReviewStreamEvent, postReviewStream } from "./review-stream.js";
+import { applyCursorBackgroundEvent, postCursorReviewStream } from "./cursor-review-stream.js";
+import {
+  hideReviewProgressDock,
+  renderReviewProgressDockHtml,
+  setReviewProgress,
+  showReviewProgressDock,
+} from "./review-progress-ui.js";
 import { buildPrChatContext, wirePrChatSidebar } from "./pr-chat.js";
 import {
   countActiveFindings,
@@ -352,7 +359,9 @@ async function onSubmit(e) {
   hero.classList.add("hidden");
   results.classList.remove("hidden");
   document.getElementById("main-stage")?.classList.add("cedar-review-wide");
-  results.innerHTML = loadingSkeleton();
+    results.innerHTML = loadingSkeleton();
+  showReviewProgressDock();
+  setReviewProgress(4, "Starting review", "Fetching PR from GitHub…");
 
   try {
     const statusEl = document.getElementById("review-progress-status");
@@ -384,6 +393,7 @@ async function onSubmit(e) {
     window.__cedarSession = {
       prUrl: payload.prUrl,
       token: payload.token,
+      cursorApiKey: payload.cursorApiKey,
       data,
       serverHealth: window.__cedarServerHealth,
       sliceApprovals: new Set(),
@@ -393,6 +403,12 @@ async function onSubmit(e) {
     };
     ensureFindingSession(window.__cedarSession);
 
+    if (!data.cursorReviewPending) {
+      setReviewProgress(100, "Review ready", "Architecture and slices loaded.");
+      hideReviewProgressDock({ delayMs: 2000 });
+    } else {
+      setReviewProgress(58, "PR layout ready", "Cursor slice + macro review running in background…");
+    }
     renderResults(results, data);
   } catch (err) {
     results.innerHTML = "";
@@ -409,6 +425,7 @@ async function onSubmit(e) {
 
 function loadingSkeleton() {
   return `
+    ${renderReviewProgressDockHtml()}
     <div id="review-progress-panel" class="cedar-glass p-6 sm:p-8">
       <p class="cedar-label">Review in progress</p>
       <p id="review-progress-status" class="mt-3 text-sm font-medium text-zinc-200">Connecting…</p>
@@ -425,6 +442,67 @@ function finishReviewUi(container) {
   wireMacroReviewPost(container);
   repaintAllDiffComments(container);
   void loadDiffReviewComments(container);
+  if (window.__cedarSession?.data?.cursorReviewPending) showReviewProgressDock();
+  void startBackgroundCursorReviewIfNeeded(container);
+}
+
+/**
+ * @param {HTMLElement} container
+ */
+async function startBackgroundCursorReviewIfNeeded(container) {
+  const session = window.__cedarSession;
+  if (!session?.data?.cursorReviewPending) return;
+  if (session.data.__cursorBgStarted) return;
+  session.data.__cursorBgStarted = true;
+
+  showReviewProgressDock();
+  const sliceTotal = (session.data.microPrs ?? []).filter((m) => (m.files?.length ?? m.fileCount ?? 0) > 0).length;
+  setReviewProgress(55, "Cursor · slice review (background)", `0 of ${sliceTotal} slices`);
+
+  const payload = {
+    cursorApiKey: session.cursorApiKey,
+    report: {
+      microPrs: session.data.microPrs,
+      microResults: session.data.microResults,
+      pull: session.data.pull,
+      breakouts: session.data.breakouts,
+    },
+  };
+
+  const onEvent = (event) => {
+    applyReviewStreamEvent(event, null, null);
+    applyCursorBackgroundEvent(event, () => {
+      if (event.type === "cursor_slice") {
+        patchFindingsAndMetrics();
+        repaintAllDiffComments(container);
+      }
+      if (event.type === "cursor_done") {
+        const results = document.getElementById("results");
+        if (results && session.data) {
+          refreshReviewUi();
+          finishReviewUiWithoutBackground(results);
+        }
+      }
+    });
+  };
+
+  try {
+    await postCursorReviewStream(payload, onEvent);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (statusEl) statusEl.textContent = `Cursor review failed · ${msg}`;
+    showToast(msg, "error");
+    session.data.cursorReviewPending = false;
+  }
+}
+
+/** Re-wire UI without re-entering background cursor loop. */
+function finishReviewUiWithoutBackground(container) {
+  bindApproveHandlers(container);
+  wireFindingActions(container, patchFindingsAndMetrics);
+  wireFileReviewToggles(container);
+  wireMacroReviewPost(container);
+  repaintAllDiffComments(container);
 }
 
 function refreshReviewUi() {
@@ -1331,6 +1409,7 @@ function renderResults(container, data) {
     .join("");
 
   container.innerHTML = `
+    ${renderReviewProgressDockHtml()}
     <header class="cedar-pr-header cedar-glass mb-8">
       <div class="cedar-pr-header-id">
         <p class="cedar-pr-header-eyebrow">Pull request</p>

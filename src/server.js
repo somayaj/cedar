@@ -25,6 +25,7 @@ import { runWithReviewProgress } from "./review-progress.js";
 import { resolveDiffFontConfig } from "./diff-font-config.js";
 import { ENV_FILE_PATH, envFileExists, upsertProjectEnv } from "./env-file.js";
 import { runWithReviewCredentials } from "./review-credentials.js";
+import { hydrateMicroPrsFromReport, runBackgroundCursorReview } from "./cursor-review-background.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
@@ -116,6 +117,7 @@ function reviewPayload(report) {
     composite: report.composite,
     macroReview: report.macroReview,
     cursorReviewSummary: report.cursorReviewSummary,
+    cursorReviewPending: report.cursorReviewPending,
     outputMarkdown: report.outputMarkdown,
   };
 }
@@ -219,6 +221,57 @@ app.post("/api/review/stream", async (req, res) => {
   } catch (err) {
     const explained = explainGithubError(err, { action: "read this pull request" });
     send({ type: "error", error: explained.error ?? String(err) });
+  } finally {
+    res.end();
+  }
+});
+
+app.post("/api/cursor-review/stream", async (req, res) => {
+  const body = req.body ?? {};
+  const cursorKey =
+    (typeof body.cursorApiKey === "string" && body.cursorApiKey.trim()) || cursorApiKey() || undefined;
+  const report = body.report;
+  if (!report?.microPrs?.length || !report?.microResults?.length || !report?.pull) {
+    res.status(400).json({ error: "Missing report snapshot (microPrs, microResults, pull)" });
+    return;
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+  res.write(": cedar cursor review stream\n\n");
+
+  const send = (event) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+    if (typeof res.flush === "function") res.flush();
+  };
+
+  try {
+    send({ type: "activity", text: "Cursor review (background)…", phase: "cursor-slices" });
+    await runWithReviewProgress(send, () =>
+      runWithReviewCredentials({ cursorApiKey: cursorKey }, () =>
+        runBackgroundCursorReview({
+          microPrs: hydrateMicroPrsFromReport(report.microPrs),
+          microResults: report.microResults,
+          architectureSummary: report.breakouts?.architectureSummary,
+          breakouts: report.breakouts,
+          pull: {
+            title: report.pull.title,
+            number: report.pull.number,
+            headSha: report.pull.headSha,
+          },
+          emit: send,
+        })
+      )
+    );
+    send({ type: "done" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    send({ type: "error", error: message });
   } finally {
     res.end();
   }

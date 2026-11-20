@@ -107,6 +107,10 @@ function sliceCursorEmptyMessage(r, session) {
     return "No changed files in this slice — Cursor line comments are not generated here.";
   }
 
+  if (cr?.status === "pending") {
+    return `Cursor is reviewing this slice in the <strong class="font-medium text-zinc-400">background</strong> — watch the progress bar above. Findings will appear here and on the diff when ready.`;
+  }
+
   if (cr?.status === "skipped") {
     const hint = cr.error ? ` ${escapeHtml(cr.error)}` : "";
     return `Per-slice Composer review is <strong class="font-medium text-zinc-400">off</strong> for this run.${hint} Architectural breakouts can still use Cursor. Remove <span class="font-mono text-zinc-600">CEDAR_AI_SLICE_REVIEW=false</span> from <span class="font-mono text-zinc-600">.env</span>, restart <span class="font-mono text-zinc-600">npm run dev:api</span>, then <strong class="font-medium text-zinc-400">Start review</strong>.`;

@@ -1326,6 +1326,26 @@
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
   }
 
+  .cedar-review-progress-dock {
+    border: 1px solid rgba(52, 211, 153, 0.15);
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.08), rgba(0, 0, 0, 0.12));
+  }
+
+  .cedar-review-progress-track {
+    height: 6px;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .cedar-review-progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #059669, #34d399, #6ee7b7);
+    transition: width 0.35s ease;
+  }
+
   .cedar-diff-comment-card--cursor {
     border-color: rgba(52, 211, 153, 0.22);
     background: rgba(16, 185, 129, 0.06);
