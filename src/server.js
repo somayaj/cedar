@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { runPrReviewPipeline } from "./orchestrator.js";
 import { resolvePrTarget } from "./parse-pr-url.js";
 import { submitGithubApproval } from "./approve.js";
-import { submitInlineDiffComment } from "./inline-comment.js";
+import { listInlineDiffComments, submitInlineDiffComment } from "./inline-comment.js";
 import { explainGithubError } from "./github-token-help.js";
 import {
   DEFAULT_CURSOR_MODEL,
@@ -197,6 +197,26 @@ app.post("/api/pr-chat", async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message, provider: prChatProviderLabel() });
+  }
+});
+
+app.post("/api/comments/list", async (req, res) => {
+  const token = req.body?.token ?? process.env.GITHUB_TOKEN;
+  const { owner, repo, pr, prUrl } = req.body ?? {};
+
+  if (!token) {
+    res.status(400).json({ error: "GitHub token required" });
+    return;
+  }
+
+  try {
+    const result = await listInlineDiffComments({ prUrl, owner, repo, pr, token });
+    res.json(result);
+  } catch (err) {
+    const explained = explainGithubError(err, { action: "list pull request review comments" });
+    const errStatus = /** @type {{ status?: number }} */ (err)?.status;
+    const status = errStatus === 403 ? 403 : 500;
+    res.status(status).json(explained);
   }
 });
 

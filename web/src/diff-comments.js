@@ -1,4 +1,6 @@
-/** @typedef {{ prUrl: string, token?: string, data: { target?: { owner?: string, repo?: string, pr?: number }, pull?: { headSha?: string } } }} CedarSession */
+/** @typedef {{ id: number, path: string, line: number, side: string, body: string, html_url?: string, user?: string | null, created_at?: string }} ReviewComment */
+
+/** @typedef {{ prUrl: string, token?: string, reviewComments?: ReviewComment[], data: { target?: { owner?: string, repo?: string, pr?: number }, pull?: { headSha?: string } } }} CedarSession */
 
 /** @type {HTMLElement | null} */
 let popover = null;
@@ -160,7 +162,16 @@ async function submitActiveComment() {
       throw new Error(msg || "Comment failed");
     }
 
-    activeTarget.row.classList.add("cedar-diff-line-commented");
+    if (json.comment) {
+      upsertSessionComment(/** @type {ReviewComment} */ (json.comment));
+    }
+    const fileBody = activeTarget.row.closest("[data-file-body]");
+    const root = fileBody?.closest("#results") ?? document;
+    if (fileBody instanceof HTMLElement) {
+      paintCommentsForBody(fileBody, getSessionComments(), activeTarget.path);
+    } else {
+      repaintAllDiffComments(root);
+    }
     closePopover();
     showCommentToast(`Posted on GitHub · ${pathBasename(activeTarget.path)}:${activeTarget.line}`);
   } catch (err) {
@@ -173,6 +184,128 @@ async function submitActiveComment() {
 function pathBasename(path) {
   const parts = path.split("/");
   return parts[parts.length - 1] || path;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * @param {string} path
+ * @param {number} line
+ * @param {string} side
+ */
+function commentAnchorKey(path, line, side) {
+  return `${path}\0${line}\0${side === "LEFT" ? "LEFT" : "RIGHT"}`;
+}
+
+/**
+ * @returns {ReviewComment[]}
+ */
+function getSessionComments() {
+  const session = /** @type {CedarSession | undefined} */ (window.__cedarSession);
+  return session?.reviewComments ?? [];
+}
+
+/**
+ * @param {ReviewComment} comment
+ */
+function upsertSessionComment(comment) {
+  const session = /** @type {CedarSession | undefined} */ (window.__cedarSession);
+  if (!session) return;
+  if (!session.reviewComments) session.reviewComments = [];
+  const idx = session.reviewComments.findIndex((c) => c.id === comment.id);
+  if (idx >= 0) session.reviewComments[idx] = comment;
+  else session.reviewComments.push(comment);
+}
+
+/**
+ * @param {ReviewComment[]} comments
+ */
+function commentsByAnchor(comments) {
+  /** @type {Map<string, ReviewComment[]>} */
+  const map = new Map();
+  for (const c of comments) {
+    if (!c.path || !Number.isFinite(c.line)) continue;
+    const key = commentAnchorKey(c.path, c.line, c.side ?? "RIGHT");
+    const list = map.get(key) ?? [];
+    list.push(c);
+    map.set(key, list);
+  }
+  return map;
+}
+
+/**
+ * @param {ReviewComment[]} items
+ */
+function renderCommentThreadSlide(items) {
+  const cards = items
+    .map((c) => {
+      const who = c.user ? `@${escapeHtml(c.user)}` : "Reviewer";
+      const when = c.created_at ? escapeHtml(new Date(c.created_at).toLocaleString()) : "";
+      const link = c.html_url
+        ? `<a class="cedar-diff-comment-thread-link" href="${escapeHtml(c.html_url)}" target="_blank" rel="noreferrer">Open on GitHub</a>`
+        : "";
+      return `<article class="cedar-diff-comment-card">
+        <header class="cedar-diff-comment-card-head">
+          <span class="cedar-diff-comment-card-user">${who}</span>
+          ${when ? `<span class="cedar-diff-comment-card-time">${when}</span>` : ""}
+          ${link}
+        </header>
+        <p class="cedar-diff-comment-card-body">${escapeHtml(c.body).replace(/\n/g, "<br>")}</p>
+      </article>`;
+    })
+    .join("");
+  return `<div class="cedar-diff-comment-thread" role="region" aria-label="Review comments on this line">${cards}</div>`;
+}
+
+/**
+ * @param {HTMLElement} body
+ * @param {ReviewComment[]} comments
+ * @param {string} path
+ */
+function paintCommentsForBody(body, comments, path) {
+  body.querySelectorAll(".cedar-diff-comment-thread-row").forEach((el) => el.remove());
+
+  const byAnchor = commentsByAnchor(comments.filter((c) => c.path === path));
+  if (!byAnchor.size) return;
+
+  body.querySelectorAll(".d2h-diff-tbody tr.cedar-diff-comment-row").forEach((row) => {
+    if (!(row instanceof HTMLElement)) return;
+    const resolved = resolveLineFromRow(row);
+    if (!resolved) return;
+    const key = commentAnchorKey(path, resolved.line, resolved.side);
+    const items = byAnchor.get(key);
+    if (!items?.length) return;
+
+    row.classList.add("cedar-diff-line-commented");
+    const colCount = row.querySelectorAll("td").length || 4;
+    const threadRow = document.createElement("tr");
+    threadRow.className = "cedar-diff-comment-thread-row";
+    const td = document.createElement("td");
+    td.colSpan = Math.max(colCount, 4);
+    td.className = "cedar-diff-comment-thread-cell";
+    td.innerHTML = renderCommentThreadSlide(items);
+    threadRow.appendChild(td);
+    row.insertAdjacentElement("afterend", threadRow);
+  });
+}
+
+/**
+ * @param {ParentNode} root
+ */
+function repaintAllDiffComments(root) {
+  const comments = getSessionComments();
+  root.querySelectorAll("[data-file-body]").forEach((body) => {
+    if (!(body instanceof HTMLElement)) return;
+    const path = body.closest("[data-file-review]")?.getAttribute("data-file-path");
+    if (!path) return;
+    paintCommentsForBody(body, comments, path);
+  });
 }
 
 /** Global toast hook set from app.js */
@@ -281,5 +414,40 @@ export function wireDiffComments(root) {
   root.querySelectorAll("[data-file-body]").forEach((body) => {
     if (!(body instanceof HTMLElement)) return;
     wireDiffBodyComments(body);
+    const path = body.closest("[data-file-review]")?.getAttribute("data-file-path");
+    if (path && getSessionComments().length) {
+      paintCommentsForBody(body, getSessionComments(), path);
+    }
   });
+}
+
+/**
+ * @param {ParentNode} root
+ */
+export async function loadDiffReviewComments(root) {
+  const session = /** @type {CedarSession | undefined} */ (window.__cedarSession);
+  if (!session) return;
+
+  try {
+    const res = await fetch("/api/comments/list", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prUrl: session.prUrl,
+        token: session.token,
+        owner: session.data.target?.owner,
+        repo: session.data.target?.repo,
+        pr: session.data.target?.pr,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      const msg = [json.error, json.hint, json.githubMessage].filter(Boolean).join("\n\n");
+      throw new Error(msg || "Could not load comments");
+    }
+    session.reviewComments = json.comments ?? [];
+    repaintAllDiffComments(root);
+  } catch (err) {
+    showCommentToast(err instanceof Error ? err.message : String(err), "error");
+  }
 }

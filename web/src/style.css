@@ -482,7 +482,32 @@
   }
 
   .cedar-file-change-badge {
-    @apply text-[10px] font-medium;
+    @apply shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] leading-none;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.2);
+  }
+
+  .cedar-file-change-badge--added {
+    @apply border-emerald-500/35 bg-emerald-500/15 text-emerald-200;
+  }
+
+  .cedar-file-change-badge--deleted {
+    @apply border-rose-500/35 bg-rose-500/15 text-rose-200;
+  }
+
+  .cedar-file-change-badge--renamed {
+    @apply border-indigo-400/35 bg-indigo-500/15 text-indigo-200;
+  }
+
+  .cedar-file-change-badge--copied {
+    @apply border-teal-400/35 bg-teal-500/15 text-teal-100;
+  }
+
+  .cedar-file-change-badge--changed {
+    @apply border-sky-400/40 bg-sky-500/20 text-sky-100;
+  }
+
+  .cedar-file-change-badge--modified {
+    @apply border-amber-400/35 bg-amber-500/15 text-amber-100;
   }
 
   .cedar-layout-view.is-diagram-collapsed .diagram-stage-canvas {
@@ -1015,8 +1040,15 @@
     box-shadow: 0 1px 0 rgb(0 0 0 / 0.2);
   }
 
-  .cedar-gh-open-github {
+  .cedar-gh-file-actions-end {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.65rem;
     margin-left: auto;
+  }
+
+  .cedar-gh-open-github {
     font-size: 11px;
     font-weight: 500;
     color: #58a6ff;
@@ -1164,7 +1196,69 @@
   }
 
   .cedar-diff-line-commented .cedar-diff-gutter {
-    box-shadow: inset 2px 0 0 #3fb950;
+    box-shadow: inset 4px 0 0 #3fb950;
+    background-color: rgb(46 160 67 / 0.12) !important;
+  }
+
+  .cedar-diff-comment-thread-row .cedar-diff-comment-thread-cell {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .cedar-diff-comment-thread {
+    margin: 0.35rem 0 0.65rem 2.25rem;
+    padding: 0.65rem 0.75rem 0.75rem 0.85rem;
+    border: 1px solid rgb(46 160 67 / 0.35);
+    border-left: 4px solid #3fb950;
+    border-radius: 0 8px 8px 0;
+    background: linear-gradient(90deg, rgb(46 160 67 / 0.14) 0%, rgb(13 17 23) 55%);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  }
+
+  .cedar-diff-comment-card + .cedar-diff-comment-card {
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgb(46 160 67 / 0.2);
+  }
+
+  .cedar-diff-comment-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.65rem;
+    margin-bottom: 0.35rem;
+    font-size: 10px;
+  }
+
+  .cedar-diff-comment-card-user {
+    font-weight: 600;
+    color: #7ee787;
+  }
+
+  .cedar-diff-comment-card-time {
+    color: #8b949e;
+  }
+
+  .cedar-diff-comment-thread-link {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 500;
+    color: #58a6ff;
+    text-decoration: none;
+  }
+
+  .cedar-diff-comment-thread-link:hover {
+    text-decoration: underline;
+  }
+
+  .cedar-diff-comment-card-body {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #e6edf3;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .cedar-diff-comment-popover {

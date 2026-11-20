@@ -12,7 +12,7 @@ import {
 } from "../../src/architecture-model.js";
 import { buildPrArchitectureLayers } from "../../src/pr-architecture-layers.js";
 import { renderSliceFileReviews, wireFileReviewToggles } from "./diff-view.js";
-import { setCommentToast } from "./diff-comments.js";
+import { loadDiffReviewComments, setCommentToast } from "./diff-comments.js";
 import { initDiffFontFromServer } from "./diff-font.js";
 import {
   mountCompleteLayoutViews,
@@ -1284,6 +1284,7 @@ function renderResults(container, data) {
   });
 
   wireFileReviewToggles(container);
+  void loadDiffReviewComments(container);
 }
 
 function bindApproveHandlers(root) {

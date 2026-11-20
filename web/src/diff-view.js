@@ -93,24 +93,25 @@ function statusLabel(status) {
   return labels[s] ?? "Modified";
 }
 
-const FILE_CHANGE_BADGE = {
-  added: { fill: "#14532d", border: "#34d399", text: "#d1fae5" },
-  removed: { fill: "#450a0a", border: "#f87171", text: "#fecaca" },
-  deleted: { fill: "#450a0a", border: "#f87171", text: "#fecaca" },
-  renamed: { fill: "#312e81", border: "#818cf8", text: "#e0e7ff" },
-  copied: { fill: "#134e4a", stroke: "#2dd4bf", text: "#ccfbf1", border: "#2dd4bf" },
-  changed: { fill: "#1e3a8a", border: "#60a5fa", text: "#dbeafe" },
-  modified: { fill: "#422006", border: "#fbbf24", text: "#fef3c7" },
+/** @type {Record<string, string>} */
+const FILE_CHANGE_BADGE_KIND = {
+  added: "added",
+  removed: "deleted",
+  deleted: "deleted",
+  renamed: "renamed",
+  copied: "copied",
+  changed: "changed",
+  modified: "modified",
 };
 
 /**
  * @param {string} status
  */
 function renderFileChangeBadge(status) {
-  const key = String(status ?? "modified").toLowerCase();
-  const c = FILE_CHANGE_BADGE[key] ?? FILE_CHANGE_BADGE.modified;
-  const border = c.border ?? c.stroke;
-  return `<span class="cedar-badge cedar-file-change-badge" style="border-color:${border}55;background-color:${c.fill};color:${c.text}">${escapeHtml(statusLabel(key))}</span>`;
+  const raw = String(status ?? "modified").toLowerCase();
+  const kind = FILE_CHANGE_BADGE_KIND[raw] ?? "modified";
+  const label = statusLabel(raw);
+  return `<span class="cedar-badge cedar-file-change-badge cedar-file-change-badge--${kind}" title="File status on GitHub">${escapeHtml(label)}</span>`;
 }
 
 /**
@@ -141,12 +142,14 @@ export function renderSliceFileReviews(files, pullUrl = "") {
             <button type="button" class="cedar-gh-diff-mode${format === "side-by-side" ? " is-active" : ""}" data-diff-mode="side-by-side" title="Split">Split</button>
             <button type="button" class="cedar-gh-diff-mode${format === "line-by-line" ? " is-active" : ""}" data-diff-mode="line-by-line" title="Unified">Unified</button>
           </div>
-          ${
-            ghFile
-              ? `<a href="${escapeHtml(ghFile)}" target="_blank" rel="noreferrer" class="cedar-gh-open-github">Open on GitHub</a>`
-              : ""
-          }
-          ${renderFileChangeBadge(status)}
+          <div class="cedar-gh-file-actions-end">
+            ${renderFileChangeBadge(status)}
+            ${
+              ghFile
+                ? `<a href="${escapeHtml(ghFile)}" target="_blank" rel="noreferrer" class="cedar-gh-open-github">Open on GitHub</a>`
+                : ""
+            }
+          </div>
         </div>
         <div class="cedar-gh-file-body" data-file-body id="file-review-${i}">
           ${diffHtml || `<p class="cedar-gh-diff-empty">No patch returned for this file.</p>`}

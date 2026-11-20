@@ -109,6 +109,30 @@ export async function createPullRequestReviewComment(octokit, opts) {
   return data;
 }
 
+/**
+ * @param {Octokit} octokit
+ * @param {{ owner: string, repo: string, pull_number: number }} pr
+ */
+export async function fetchPullRequestReviewComments(octokit, pr) {
+  /** @type {import("@octokit/rest").RestEndpointMethodTypes["pulls"]["listReviewComments"]["response"]["data"]} */
+  const all = [];
+  let page = 1;
+  for (;;) {
+    const { data } = await octokit.pulls.listReviewComments({
+      owner: pr.owner,
+      repo: pr.repo,
+      pull_number: pr.pull_number,
+      per_page: 100,
+      page,
+    });
+    if (!data.length) break;
+    all.push(...data);
+    if (data.length < 100) break;
+    page += 1;
+  }
+  return all;
+}
+
 async function listPullReviews(octokit, pr, login) {
   const { data } = await octokit.pulls.listReviews({
     owner: pr.owner,

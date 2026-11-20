@@ -1,4 +1,9 @@
-import { createClient, fetchPullRequest, createPullRequestReviewComment } from "./github.js";
+import {
+  createClient,
+  fetchPullRequest,
+  createPullRequestReviewComment,
+  fetchPullRequestReviewComments,
+} from "./github.js";
 import { resolvePrTarget } from "./parse-pr-url.js";
 
 /**
@@ -59,7 +64,47 @@ export async function submitInlineDiffComment(opts) {
       path: comment.path,
       line: comment.line,
       side: comment.side,
+      body: comment.body,
+      user: comment.user?.login ?? null,
+      created_at: comment.created_at,
     },
     headSha: commitId,
+  };
+}
+
+/**
+ * @param {{
+ *   prUrl?: string,
+ *   owner?: string,
+ *   repo?: string,
+ *   pr?: number,
+ *   token: string,
+ * }} opts
+ */
+export async function listInlineDiffComments(opts) {
+  const target = opts.prUrl
+    ? resolvePrTarget({ prUrl: opts.prUrl })
+    : resolvePrTarget({ owner: opts.owner, repo: opts.repo, pr: opts.pr });
+
+  const octokit = createClient(opts.token);
+  const raw = await fetchPullRequestReviewComments(octokit, {
+    owner: target.owner,
+    repo: target.repo,
+    pull_number: target.pr,
+  });
+
+  return {
+    target,
+    comments: raw.map((c) => ({
+      id: c.id,
+      html_url: c.html_url,
+      path: c.path,
+      line: c.line ?? c.original_line,
+      side: c.side ?? "RIGHT",
+      body: c.body ?? "",
+      user: c.user?.login ?? null,
+      created_at: c.created_at,
+      commit_id: c.commit_id,
+    })),
   };
 }
