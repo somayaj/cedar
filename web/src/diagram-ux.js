@@ -33,7 +33,15 @@ export function registerMermaidDiagramHost(hostId, wrap) {
  * @param {"in" | "out" | "fit"} action
  */
 export function applyMermaidZoomByHostId(hostId, action) {
-  const wrap = mermaidWrapByHostId.get(hostId);
+  let wrap = mermaidWrapByHostId.get(hostId);
+  if (!wrap) {
+    const anchor = document.getElementById(hostId);
+    const candidate = anchor?.closest("[data-diagram-wrap]");
+    if (candidate instanceof HTMLElement) {
+      wrap = candidate;
+      registerMermaidDiagramHost(hostId, wrap);
+    }
+  }
   if (!wrap || !umlFitByWrap.has(wrap)) return false;
   if (action === "in") nudgeDiagramZoom(wrap, "in");
   else if (action === "out") nudgeDiagramZoom(wrap, "out");
@@ -63,6 +71,44 @@ function nudgeDiagramZoom(wrap, dir) {
 /**
  * @param {HTMLElement} wrap
  */
+/**
+ * @param {SVGSVGElement} svg
+ */
+function readSvgNaturalSize(svg) {
+  const vb = svg.viewBox?.baseVal;
+  if (vb && vb.width > 0 && vb.height > 0) {
+    return { w: vb.width, h: vb.height };
+  }
+  const aw = svg.width?.baseVal?.value ?? 0;
+  const ah = svg.height?.baseVal?.value ?? 0;
+  if (aw > 8 && ah > 8) return { w: aw, h: ah };
+  try {
+    const bb = svg.getBBox();
+    if (bb.width > 0 && bb.height > 0) {
+      if (!svg.getAttribute("viewBox")) {
+        svg.setAttribute("viewBox", `${bb.x} ${bb.y} ${bb.width} ${bb.height}`);
+      }
+      return { w: bb.width, h: bb.height };
+    }
+  } catch {
+    /* SVG not laid out yet */
+  }
+  return { w: 0, h: 0 };
+}
+
+/**
+ * @param {SVGSVGElement} svg
+ */
+function normalizeSequenceSvg(svg) {
+  svg.style.maxWidth = "none";
+  svg.style.height = "auto";
+  svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
+  const { w, h } = readSvgNaturalSize(svg);
+  if (w > 0 && h > 0 && !svg.getAttribute("viewBox")) {
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  }
+}
+
 function fitDiagramZoomToStage(wrap) {
   const stage = wrap.querySelector(".diagram-complete-layout");
   const svg = wrap.querySelector("svg");
@@ -71,9 +117,7 @@ function fitDiagramZoomToStage(wrap) {
     umlFitByWrap.get(wrap)?.();
     return;
   }
-  const vb = svg.viewBox?.baseVal;
-  const naturalW = vb?.width > 0 ? vb.width : svg.width?.baseVal?.value || 0;
-  const naturalH = vb?.height > 0 ? vb.height : svg.height?.baseVal?.value || 0;
+  const { w: naturalW, h: naturalH } = readSvgNaturalSize(svg);
   if (naturalW < 8 || naturalH < 8) {
     umlZoomByWrap.set(wrap, 1);
   } else {
@@ -185,7 +229,15 @@ async function ensureMermaid() {
     theme: "base",
     flowchart: { htmlLabels: false, useMaxWidth: true, padding: 20, curve: "basis", nodeSpacing: 42, rankSpacing: 56 },
     class: { useMaxWidth: true },
-    sequence: { useMaxWidth: true, wrap: true },
+    sequence: {
+      useMaxWidth: false,
+      wrap: true,
+      diagramMarginX: 28,
+      diagramMarginY: 16,
+      actorMargin: 48,
+      messageMargin: 40,
+      boxMargin: 8,
+    },
     themeVariables: {
       darkMode: true,
       background: "transparent",
@@ -268,7 +320,9 @@ export async function renderArchitectureMermaid(source, pre) {
     pre.classList.add("mermaid-rendered");
     bindFunctions?.(pre);
     const svgEl = pre.querySelector("svg");
-    const isClassDiagram = graph.trimStart().startsWith("classDiagram");
+    const head = graph.trimStart();
+    const isClassDiagram = head.startsWith("classDiagram");
+    const isSequenceDiagram = head.startsWith("sequenceDiagram");
     if (svgEl instanceof SVGSVGElement) {
       svgEl.style.display = "block";
       svgEl.style.height = "auto";
@@ -277,7 +331,9 @@ export async function renderArchitectureMermaid(source, pre) {
       svgEl.style.margin = "0";
       svgEl.style.maxWidth = "none";
       svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
-      if (!isClassDiagram) {
+      if (isSequenceDiagram) {
+        normalizeSequenceSvg(svgEl);
+      } else if (!isClassDiagram) {
         svgEl.style.marginInline = "auto";
       }
     }
@@ -533,9 +589,7 @@ function mountLayoutMermaidScrollable(wrap, pre) {
 
   const fit = () => {
     const zoom = umlZoomByWrap.get(wrap) ?? 1;
-    const vb = svg.viewBox?.baseVal;
-    const naturalW = vb?.width > 0 ? vb.width : svg.width?.baseVal?.value || 0;
-    const naturalH = vb?.height > 0 ? vb.height : svg.height?.baseVal?.value || 0;
+    const { w: naturalW, h: naturalH } = readSvgNaturalSize(svg);
     if (naturalW > 0 && naturalH > 0) {
       const w = Math.max(Math.round(naturalW * zoom), 280);
       const h = Math.max(Math.round(naturalH * zoom), 120);
@@ -561,8 +615,16 @@ function mountLayoutMermaidScrollable(wrap, pre) {
   umlFitByWrap.set(wrap, fit);
   if (pre.id) registerMermaidDiagramHost(pre.id, wrap);
 
+  const layoutView = wrap.getAttribute("data-layout-view");
+  if (layoutView === "events") {
+    stage.classList.add("diagram-stage-sequence");
+  }
+
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => fitDiagramZoomToStage(wrap));
+    requestAnimationFrame(() => {
+      if (layoutView === "events") normalizeSequenceSvg(svg);
+      fitDiagramZoomToStage(wrap);
+    });
   });
 
   if (!resizeObserverByWrap.has(wrap)) {

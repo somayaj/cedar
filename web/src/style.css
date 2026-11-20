@@ -350,6 +350,17 @@
     min-height: 8rem;
   }
 
+  .cedar-complete-layout-views .diagram-stage-sequence {
+    min-height: min(75vh, 720px);
+  }
+
+  .cedar-complete-layout-views .diagram-stage-sequence .mermaid-rendered svg,
+  .cedar-complete-layout-views .diagram-stage-sequence .cedar-mermaid-source svg {
+    width: auto !important;
+    max-width: none !important;
+    min-width: min(100%, 320px);
+  }
+
   .cedar-complete-layout-views .cedar-layout-view.is-diagram-maximized .diagram-overview-read.diagram-stage-canvas {
     min-height: min(64vh, 780px);
     height: min(78vh, 1000px);
@@ -1284,6 +1295,16 @@
 
   .cedar-diff-comment-thread-row.is-collapsed .cedar-diff-comment-thread {
     display: none;
+  }
+
+  .cedar-gh-files-changed.cedar-diff-comments-off .cedar-diff-comment-thread-row,
+  tr.cedar-diff-comment-thread-row.cedar-diff-comments-off {
+    display: none !important;
+  }
+
+  .cedar-gh-files-changed.cedar-diff-comments-off .cedar-diff-line-commented .cedar-diff-gutter {
+    box-shadow: inset 2px 0 0 rgb(63 185 80 / 0.35);
+    background-color: transparent !important;
   }
 
   .cedar-diff-comments-visibility {

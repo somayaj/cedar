@@ -275,8 +275,45 @@ function renderCommentThreadSlide(items) {
  * @param {HTMLElement} threadRow
  * @param {boolean} [expand]
  */
+/**
+ * @param {HTMLElement} host
+ */
+function commentsHostVisible(host) {
+  return host.dataset.commentsHidden !== "true";
+}
+
+/**
+ * @param {HTMLElement} host
+ * @param {boolean} visible
+ */
+function setCommentsHostVisible(host, visible) {
+  host.dataset.commentsHidden = visible ? "false" : "true";
+  host.classList.toggle("cedar-diff-comments-off", !visible);
+  host.querySelectorAll(".cedar-diff-comment-thread-row").forEach((threadRow) => {
+    if (!(threadRow instanceof HTMLElement)) return;
+    threadRow.classList.toggle("cedar-diff-comments-off", !visible);
+    if (visible) threadRow.classList.remove("is-collapsed");
+  });
+  const btn = host.querySelector("[data-comments-toggle]");
+  if (btn instanceof HTMLButtonElement) {
+    btn.textContent = visible ? "Hide comments" : "Show comments";
+    btn.setAttribute("aria-pressed", visible ? "true" : "false");
+  }
+}
+
+/**
+ * @param {HTMLElement} host
+ */
+function applyCommentsHostVisibility(host) {
+  setCommentsHostVisible(host, commentsHostVisible(host));
+}
+
 function setThreadRowExpanded(threadRow, expand) {
-  const on = expand ?? !threadRow.classList.contains("is-collapsed");
+  const host = threadRow.closest(".cedar-gh-files-changed");
+  if (host instanceof HTMLElement && !commentsHostVisible(host)) return;
+
+  const on =
+    expand === undefined ? threadRow.classList.contains("is-collapsed") : expand;
   threadRow.classList.toggle("is-collapsed", !on);
   const btn = threadRow.querySelector(".cedar-diff-comment-thread-toggle");
   const label = threadRow.querySelector(".cedar-diff-comment-thread-toggle-label");
@@ -317,44 +354,20 @@ function wireCommentThreads(body) {
   });
 }
 
-/**
- * @param {ParentNode} root
- * @param {boolean} visible
- */
-function setAllCommentThreadsVisible(root, visible) {
-  root.querySelectorAll(".cedar-diff-comment-thread-row").forEach((threadRow) => {
-    if (!(threadRow instanceof HTMLElement)) return;
-    if (visible) {
-      threadRow.hidden = false;
-      setThreadRowExpanded(threadRow, true);
-    } else {
-      threadRow.hidden = true;
-    }
-  });
-  root.querySelectorAll("[data-comments-toggle]").forEach((btn) => {
+function wireCommentVisibilityOnce() {
+  const doc = document.documentElement;
+  if (doc.dataset.cedarCommentVisWired) return;
+  doc.dataset.cedarCommentVisWired = "1";
+  document.addEventListener("click", (ev) => {
+    const btn =
+      ev.target instanceof HTMLElement ? ev.target.closest("[data-comments-toggle]") : null;
     if (!(btn instanceof HTMLButtonElement)) return;
-    btn.textContent = visible ? "Hide comments" : "Show comments";
-    btn.setAttribute("aria-pressed", visible ? "true" : "false");
-  });
-  root.querySelectorAll(".cedar-gh-files-changed").forEach((host) => {
-    if (host instanceof HTMLElement) {
-      host.dataset.commentsHidden = visible ? "false" : "true";
-    }
-  });
-}
-
-/**
- * @param {ParentNode} root
- */
-function wireCommentVisibilityControls(root) {
-  root.querySelectorAll("[data-comments-toggle]").forEach((btn) => {
-    if (!(btn instanceof HTMLButtonElement)) return;
-    if (btn.dataset.wiredCommentsToggle) return;
-    btn.dataset.wiredCommentsToggle = "1";
-    btn.addEventListener("click", () => {
-      const hidden = btn.getAttribute("aria-pressed") !== "true";
-      setAllCommentThreadsVisible(root, hidden);
-    });
+    const host = btn.closest(".cedar-gh-files-changed");
+    if (!(host instanceof HTMLElement)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const showAfterClick = btn.getAttribute("aria-pressed") !== "true";
+    setCommentsHostVisible(host, showAfterClick);
   });
 }
 
@@ -391,6 +404,10 @@ function paintCommentsForBody(body, comments, path) {
   });
 
   wireCommentThreads(body);
+  const filesHost = body.closest(".cedar-gh-files-changed");
+  if (filesHost instanceof HTMLElement) {
+    applyCommentsHostVisibility(filesHost);
+  }
 }
 
 /**
@@ -403,6 +420,9 @@ function repaintAllDiffComments(root) {
     const path = body.closest("[data-file-review]")?.getAttribute("data-file-path");
     if (!path) return;
     paintCommentsForBody(body, comments, path);
+  });
+  root.querySelectorAll(".cedar-gh-files-changed").forEach((host) => {
+    if (host instanceof HTMLElement) applyCommentsHostVisibility(host);
   });
 }
 
@@ -492,7 +512,10 @@ function wireDiffBodyComments(body) {
 
     const openFromRow = (ev) => {
       if (ev.target instanceof HTMLElement && ev.target.closest(".cedar-diff-add-comment")) return;
+      const filesHost = row.closest(".cedar-gh-files-changed");
       if (
+        filesHost instanceof HTMLElement &&
+        commentsHostVisible(filesHost) &&
         row.classList.contains("cedar-diff-line-commented") &&
         row.nextElementSibling?.classList.contains("cedar-diff-comment-thread-row") &&
         !(ev.target instanceof HTMLElement && ev.target.closest(".cedar-diff-add-comment"))
@@ -523,7 +546,7 @@ function wireDiffBodyComments(body) {
  */
 export function wireDiffComments(root) {
   wirePopoverOnce();
-  wireCommentVisibilityControls(root);
+  wireCommentVisibilityOnce();
   root.querySelectorAll("[data-file-body]").forEach((body) => {
     if (!(body instanceof HTMLElement)) return;
     wireDiffBodyComments(body);
